@@ -1,19 +1,64 @@
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Short-Circuit Calculator
-        </h1>
-        <p className="mt-2 text-gray-600">
-          IEC 60909-0 Calculation Engine
-        </p>
-        <p className="mt-4 text-sm text-gray-500">
-          V1b - Frontend coming soon
-        </p>
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
+
+function PrivateRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-500">Načítavam...</div>
       </div>
-    </div>
-  )
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
 }
 
-export default App
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-500">Načítavam...</div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/projects" />;
+  }
+
+  return children;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
+      <Route path="/projects/:projectId" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
+      <Route path="/" element={<Navigate to="/projects" />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

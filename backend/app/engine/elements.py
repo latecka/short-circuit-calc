@@ -398,6 +398,40 @@ class Transformer3W(NetworkElement):
             ComplexImpedance(R_L * voltage_ratio, X_L * voltage_ratio)
         )
 
+    def get_impedance(self, ref_voltage: float, target_bus: str = "lv") -> tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]:
+        """
+        Calculate Z1, Z2, Z0 impedances for fault on specified bus.
+
+        For 3W transformer, impedance depends on which bus has the fault.
+        Uses star-equivalent model where fault sees two parallel impedances.
+
+        Args:
+            ref_voltage: Reference voltage [kV]
+            target_bus: Which bus has fault - "hv", "mv", or "lv"
+
+        Returns:
+            Tuple of (Z1, Z2, Z0) as ComplexImpedance
+        """
+        Z_H, Z_M, Z_L = self.get_star_impedances(ref_voltage)
+
+        # For fault on LV bus: Z = Z_L + (Z_H || Z_M)
+        # For fault on MV bus: Z = Z_M + (Z_H || Z_L)
+        # For fault on HV bus: Z = Z_H + (Z_M || Z_L)
+        if target_bus == "lv":
+            Z_parallel = Z_H.parallel(Z_M)
+            Z1 = Z_L + Z_parallel
+        elif target_bus == "mv":
+            Z_parallel = Z_H.parallel(Z_L)
+            Z1 = Z_M + Z_parallel
+        else:  # hv
+            Z_parallel = Z_M.parallel(Z_L)
+            Z1 = Z_H + Z_parallel
+
+        Z2 = Z1  # Z2 = Z1 for transformers
+        Z0 = Z1  # Simplified - depends on vector groups
+
+        return Z1, Z2, Z0
+
 
 @dataclass
 class SynchronousGenerator(NetworkElement):

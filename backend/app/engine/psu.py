@@ -184,7 +184,15 @@ class PowerStationUnit(NetworkElement):
 
         # Get individual impedances
         Z1_gen, Z2_gen, Z0_gen = self._generator.get_impedance(ref_voltage)
-        Z1_tr, Z2_tr, Z0_tr = self._transformer.get_impedance(ref_voltage)
+
+        # For 3W transformer, specify which winding has the fault
+        if isinstance(self._transformer, Transformer3W):
+            # Generator is connected to one winding, fault is on opposite side (usually HV)
+            # target_bus determines which winding the fault current flows through
+            target_bus = "hv"  # Fault is typically on HV network side
+            Z1_tr, Z2_tr, Z0_tr = self._transformer.get_impedance(ref_voltage, target_bus)
+        else:
+            Z1_tr, Z2_tr, Z0_tr = self._transformer.get_impedance(ref_voltage)
 
         # Series connection
         Z1_total = Z1_gen + Z1_tr

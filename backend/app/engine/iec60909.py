@@ -461,9 +461,8 @@ class ShortCircuitCalculator:
         elif isinstance(element, (Transformer2W, Autotransformer)):
             return element.get_impedance(ref_voltage)
         elif isinstance(element, Transformer3W):
-            # Simplified - use HV-LV path
-            Z_H, Z_M, Z_L = element.get_star_impedances(ref_voltage)
-            return Z_H + Z_L, Z_H + Z_L, Z_H + Z_L
+            # Use get_impedance with default target bus (lv)
+            return element.get_impedance(ref_voltage, "lv")
         else:
             return ComplexImpedance(0, 0), ComplexImpedance(0, 0), ComplexImpedance(0, 0)
 
