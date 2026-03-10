@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/project.json",
+  "title": "Project",
+  "description": "Project entity containing network versions",
+  "type": "object",
+  "required": ["id", "name"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project name"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Project description"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Creator user ID"
+    }
+  },
+  "additionalProperties": false
+}

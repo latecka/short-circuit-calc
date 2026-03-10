@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/busbar.json",
+  "title": "Busbar",
+  "description": "Network node / busbar element",
+  "type": "object",
+  "required": ["id", "type", "Un"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "busbar"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "Un": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Nominal voltage [kV]"
+    },
+    "is_reference": {
+      "type": "boolean",
+      "default": false,
+      "description": "Reference node flag"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/synchronous_generator.json",
+  "title": "Synchronous Generator",
+  "description": "Synchronous generator element",
+  "type": "object",
+  "required": ["id", "type", "bus_id", "Sn", "Un", "Xd_pp", "cos_phi"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "synchronous_generator"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_id": {
+      "type": "string",
+      "description": "Connected busbar ID"
+    },
+    "Sn": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated apparent power [MVA]"
+    },
+    "Un": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage [kV]"
+    },
+    "Xd_pp": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Subtransient reactance Xd'' [%]"
+    },
+    "Ra": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "description": "Stator resistance [%]"
+    },
+    "cos_phi": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Power factor"
+    },
+    "connection": {
+      "enum": ["direct", "via_transformer"],
+      "default": "direct",
+      "description": "Connection type"
+    },
+    "in_service": {
+      "type": "boolean",
+      "default": true,
+      "description": "Element in service"
+    }
+  },
+  "additionalProperties": false
+}

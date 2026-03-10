@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/transformer_2w.json",
+  "title": "Transformer 2-Winding",
+  "description": "Two-winding transformer",
+  "type": "object",
+  "required": ["id", "type", "bus_hv", "bus_lv", "Sn", "Un_hv", "Un_lv", "uk_percent", "Pkr", "vector_group"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "transformer_2w"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_hv": {
+      "type": "string",
+      "description": "High voltage side busbar ID"
+    },
+    "bus_lv": {
+      "type": "string",
+      "description": "Low voltage side busbar ID"
+    },
+    "Sn": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated apparent power [MVA]"
+    },
+    "Un_hv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage HV side [kV]"
+    },
+    "Un_lv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage LV side [kV]"
+    },
+    "uk_percent": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 100,
+      "description": "Short-circuit voltage [%]"
+    },
+    "Pkr": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Short-circuit losses [kW]"
+    },
+    "vector_group": {
+      "type": "string",
+      "pattern": "^(D|Y|YN|Yn|y|yn|d)(d|y|yn|z|zn)?[0-9]{1,2}$",
+      "description": "Vector group (e.g., Dyn11, YNyn0)"
+    },
+    "tap_position": {
+      "type": "number",
+      "minimum": -20,
+      "maximum": 20,
+      "default": 0,
+      "description": "Tap position [%]"
+    },
+    "tap_side": {
+      "enum": ["hv", "lv"],
+      "default": "hv",
+      "description": "Tap changer side"
+    },
+    "neutral_grounding_hv": {
+      "enum": ["grounded", "isolated", "impedance"],
+      "default": "isolated",
+      "description": "HV neutral grounding"
+    },
+    "neutral_grounding_lv": {
+      "enum": ["grounded", "isolated", "impedance"],
+      "default": "isolated",
+      "description": "LV neutral grounding"
+    },
+    "grounding_impedance_hv_id": {
+      "type": ["string", "null"],
+      "description": "HV grounding impedance element ID"
+    },
+    "grounding_impedance_lv_id": {
+      "type": ["string", "null"],
+      "description": "LV grounding impedance element ID"
+    },
+    "in_service": {
+      "type": "boolean",
+      "default": true,
+      "description": "Element in service"
+    }
+  },
+  "additionalProperties": false
+}

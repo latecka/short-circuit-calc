@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/power_station_unit.json",
+  "title": "Power Station Unit",
+  "description": "Block unit: generator + block transformer",
+  "type": "object",
+  "required": ["id", "type", "generator_id", "transformer_id", "has_oltc"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "power_station_unit"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "generator_id": {
+      "type": "string",
+      "description": "Reference to synchronous_generator element"
+    },
+    "transformer_id": {
+      "type": "string",
+      "description": "Reference to transformer_2w or transformer_3w element"
+    },
+    "has_oltc": {
+      "type": "boolean",
+      "description": "Transformer has on-load tap changer"
+    },
+    "generator_winding": {
+      "enum": ["hv", "mv", "lv", null],
+      "description": "Generator winding for 3W transformer - required for transformer_3w"
+    }
+  },
+  "additionalProperties": false
+}

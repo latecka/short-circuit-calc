@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/asynchronous_motor.json",
+  "title": "Asynchronous Motor",
+  "description": "Asynchronous motor element",
+  "type": "object",
+  "required": ["id", "type", "bus_id", "Un", "input_mode", "Ia_In"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "asynchronous_motor"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_id": {
+      "type": "string",
+      "description": "Connected busbar ID"
+    },
+    "Un": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage [kV]"
+    },
+    "input_mode": {
+      "enum": ["power", "current"],
+      "description": "Input parameter mode"
+    },
+    "Pn": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "description": "Rated mechanical power [kW] - required if input_mode=power"
+    },
+    "eta": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "description": "Efficiency - required if input_mode=power"
+    },
+    "cos_phi": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "description": "Power factor - required if input_mode=power"
+    },
+    "In": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "description": "Rated current [A] - required if input_mode=current"
+    },
+    "Ia_In": {
+      "type": "number",
+      "exclusiveMinimum": 1,
+      "description": "Starting current / rated current ratio"
+    },
+    "pole_pairs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Number of pole pairs"
+    },
+    "include_in_sc": {
+      "type": "boolean",
+      "default": true,
+      "description": "Include motor contribution in short-circuit calculation"
+    },
+    "in_service": {
+      "type": "boolean",
+      "default": true,
+      "description": "Element in service"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "input_mode": { "const": "power" } }
+      },
+      "then": {
+        "required": ["Pn", "eta", "cos_phi"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "input_mode": { "const": "current" } }
+      },
+      "then": {
+        "required": ["In"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

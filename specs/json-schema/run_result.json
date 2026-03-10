@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/run_result.json",
+  "title": "Run Result",
+  "description": "Calculation result for a single bus and fault type",
+  "type": "object",
+  "required": [
+    "id", "run_id", "bus_id", "fault_type",
+    "Ik", "ip", "Zk", "Z1", "Z2", "R_X_ratio", "c_factor"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Parent calculation run ID"
+    },
+    "bus_id": {
+      "type": "string",
+      "description": "Fault location busbar ID"
+    },
+    "fault_type": {
+      "enum": ["Ik3", "Ik2", "Ik1"],
+      "description": "Fault type"
+    },
+    "Ik": {
+      "type": "number",
+      "description": "Initial short-circuit current [kA]"
+    },
+    "ip": {
+      "type": "number",
+      "description": "Peak short-circuit current [kA]"
+    },
+    "Zk": {
+      "$ref": "#/$defs/complex_impedance",
+      "description": "Equivalent short-circuit impedance [ohm]"
+    },
+    "Z1": {
+      "$ref": "#/$defs/complex_impedance",
+      "description": "Positive sequence impedance [ohm]"
+    },
+    "Z2": {
+      "$ref": "#/$defs/complex_impedance",
+      "description": "Negative sequence impedance [ohm]"
+    },
+    "Z0": {
+      "oneOf": [
+        { "$ref": "#/$defs/complex_impedance" },
+        { "type": "null" }
+      ],
+      "description": "Zero sequence impedance [ohm] - null if not applicable"
+    },
+    "R_X_ratio": {
+      "type": "number",
+      "description": "R/X ratio at fault location"
+    },
+    "c_factor": {
+      "type": "number",
+      "description": "Voltage factor c used"
+    },
+    "correction_factors": {
+      "type": "object",
+      "properties": {
+        "KG": { "type": "number" },
+        "KT": { "type": "number" },
+        "KS": { "type": "number" },
+        "KSO": { "type": "number" }
+      },
+      "description": "Applied correction factors"
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Warning messages"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Calculation assumptions"
+    },
+    "source_contributions": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": { "type": "string" },
+          "source_type": { "type": "string" },
+          "Ik_contribution": { "type": "number" }
+        }
+      },
+      "description": "Individual source contributions (if available)"
+    }
+  },
+  "$defs": {
+    "complex_impedance": {
+      "type": "object",
+      "required": ["r", "x"],
+      "properties": {
+        "r": {
+          "type": "number",
+          "description": "Real part (resistance) [ohm]"
+        },
+        "x": {
+          "type": "number",
+          "description": "Imaginary part (reactance) [ohm]"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

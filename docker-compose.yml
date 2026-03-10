@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: scc-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - sqlite-data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///data/short_circuit_calc.db
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-60}
+    restart: unless-stopped
+    networks:
+      - scc-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: scc-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - scc-network
+
+volumes:
+  sqlite-data:
+
+networks:
+  scc-network:
+    driver: bridge

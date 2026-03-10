@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/network_input.json",
+  "title": "Network Input",
+  "description": "Input format for CLI and API - network definition with calculation parameters",
+  "type": "object",
+  "required": ["elements", "calculation"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Network/project name"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Description"
+    },
+    "elements": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "busbar.json" },
+          { "$ref": "external_grid.json" },
+          { "$ref": "line.json" },
+          { "$ref": "transformer_2w.json" },
+          { "$ref": "transformer_3w.json" },
+          { "$ref": "autotransformer.json" },
+          { "$ref": "synchronous_generator.json" },
+          { "$ref": "power_station_unit.json" },
+          { "$ref": "asynchronous_motor.json" },
+          { "$ref": "impedance.json" },
+          { "$ref": "grounding_impedance.json" }
+        ]
+      },
+      "description": "Network elements"
+    },
+    "calculation": {
+      "type": "object",
+      "required": ["mode", "fault_types", "fault_buses"],
+      "properties": {
+        "mode": {
+          "enum": ["max", "min"],
+          "description": "Calculation mode"
+        },
+        "fault_types": {
+          "type": "array",
+          "items": {
+            "enum": ["Ik3", "Ik2", "Ik1"]
+          },
+          "minItems": 1,
+          "description": "Fault types to calculate"
+        },
+        "fault_buses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Busbar IDs for fault location"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

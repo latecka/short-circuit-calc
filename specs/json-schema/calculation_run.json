@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/calculation_run.json",
+  "title": "Calculation Run",
+  "description": "A single calculation execution",
+  "type": "object",
+  "required": [
+    "id", "project_id", "network_version_id",
+    "calculation_mode", "fault_types", "fault_buses",
+    "engine_version", "input_hash", "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Project ID"
+    },
+    "network_version_id": {
+      "type": "string",
+      "description": "Network version ID"
+    },
+    "calculation_mode": {
+      "enum": ["max", "min"],
+      "description": "Max or min short-circuit calculation"
+    },
+    "fault_types": {
+      "type": "array",
+      "items": {
+        "enum": ["Ik3", "Ik2", "Ik1"]
+      },
+      "minItems": 1,
+      "description": "Fault types to calculate"
+    },
+    "fault_buses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Busbar IDs for fault location"
+    },
+    "engine_version": {
+      "type": "string",
+      "description": "Calculation engine version"
+    },
+    "input_hash": {
+      "type": "string",
+      "description": "Hash of input data for reproducibility"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Start timestamp"
+    },
+    "completed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Completion timestamp"
+    },
+    "status": {
+      "enum": ["running", "completed", "failed"],
+      "description": "Run status"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "User who initiated the run"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "run_result.json"
+      },
+      "description": "Calculation results"
+    },
+    "errors": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string"
+      },
+      "description": "Error messages if failed"
+    }
+  },
+  "additionalProperties": false
+}

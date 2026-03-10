@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/transformer_3w.json",
+  "title": "Transformer 3-Winding",
+  "description": "Three-winding transformer",
+  "type": "object",
+  "required": [
+    "id", "type", "bus_hv", "bus_mv", "bus_lv",
+    "Sn_hv", "Sn_mv", "Sn_lv",
+    "Un_hv", "Un_mv", "Un_lv",
+    "uk_hv_mv_percent", "uk_hv_lv_percent", "uk_mv_lv_percent",
+    "Pkr_hv_mv", "Pkr_hv_lv", "Pkr_mv_lv",
+    "vector_group_hv_mv", "vector_group_hv_lv"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "transformer_3w"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_hv": {
+      "type": "string",
+      "description": "High voltage side busbar ID"
+    },
+    "bus_mv": {
+      "type": "string",
+      "description": "Medium voltage side busbar ID"
+    },
+    "bus_lv": {
+      "type": "string",
+      "description": "Low voltage side busbar ID"
+    },
+    "Sn_hv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated power HV side [MVA]"
+    },
+    "Sn_mv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated power MV side [MVA]"
+    },
+    "Sn_lv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated power LV side [MVA]"
+    },
+    "Un_hv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage HV side [kV]"
+    },
+    "Un_mv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage MV side [kV]"
+    },
+    "Un_lv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage LV side [kV]"
+    },
+    "uk_hv_mv_percent": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Short-circuit voltage HV-MV [%]"
+    },
+    "uk_hv_lv_percent": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Short-circuit voltage HV-LV [%]"
+    },
+    "uk_mv_lv_percent": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Short-circuit voltage MV-LV [%]"
+    },
+    "Pkr_hv_mv": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Short-circuit losses HV-MV [kW]"
+    },
+    "Pkr_hv_lv": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Short-circuit losses HV-LV [kW]"
+    },
+    "Pkr_mv_lv": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Short-circuit losses MV-LV [kW]"
+    },
+    "vector_group_hv_mv": {
+      "type": "string",
+      "description": "Vector group HV-MV"
+    },
+    "vector_group_hv_lv": {
+      "type": "string",
+      "description": "Vector group HV-LV"
+    },
+    "tap_position": {
+      "type": "number",
+      "default": 0,
+      "description": "Tap position [%]"
+    },
+    "tap_side": {
+      "enum": ["hv", "mv", "lv"],
+      "default": "hv",
+      "description": "Tap changer side"
+    },
+    "in_service": {
+      "type": "boolean",
+      "default": true,
+      "description": "Element in service"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/grounding_impedance.json",
+  "title": "Grounding Impedance",
+  "description": "Neutral point grounding impedance",
+  "type": "object",
+  "required": ["id", "type", "R", "X"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "grounding_impedance"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "R": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Resistance [ohm]"
+    },
+    "X": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Reactance [ohm]"
+    }
+  },
+  "additionalProperties": false
+}

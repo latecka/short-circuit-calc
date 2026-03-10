@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/external_grid.json",
+  "title": "External Grid",
+  "description": "External supply network / equivalent source",
+  "type": "object",
+  "required": ["id", "type", "bus_id", "Sk_max", "Sk_min", "rx_ratio"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "external_grid"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_id": {
+      "type": "string",
+      "description": "Connected busbar ID"
+    },
+    "Sk_max": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Maximum short-circuit power [MVA]"
+    },
+    "Sk_min": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Minimum short-circuit power [MVA]"
+    },
+    "rx_ratio": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "R/X ratio"
+    },
+    "c_max": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1.1,
+      "description": "Voltage factor c for max calculation"
+    },
+    "c_min": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1.0,
+      "description": "Voltage factor c for min calculation"
+    },
+    "Z0_Z1_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "default": 1.0,
+      "description": "Z0/Z1 ratio"
+    },
+    "X0_X1_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "default": 1.0,
+      "description": "X0/X1 ratio"
+    },
+    "R0_X0_ratio": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "R0/X0 ratio (if null, uses rx_ratio)"
+    }
+  },
+  "additionalProperties": false
+}

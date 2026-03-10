@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/network_version.json",
+  "title": "Network Version",
+  "description": "A version of the network within a project",
+  "type": "object",
+  "required": ["id", "project_id", "version_number", "elements"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Parent project ID"
+    },
+    "version_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version number"
+    },
+    "elements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/network_element"
+      },
+      "description": "Network elements"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Creator user ID"
+    },
+    "comment": {
+      "type": ["string", "null"],
+      "description": "Version comment"
+    }
+  },
+  "$defs": {
+    "network_element": {
+      "oneOf": [
+        { "$ref": "busbar.json" },
+        { "$ref": "external_grid.json" },
+        { "$ref": "line.json" },
+        { "$ref": "transformer_2w.json" },
+        { "$ref": "transformer_3w.json" },
+        { "$ref": "autotransformer.json" },
+        { "$ref": "synchronous_generator.json" },
+        { "$ref": "power_station_unit.json" },
+        { "$ref": "asynchronous_motor.json" },
+        { "$ref": "impedance.json" },
+        { "$ref": "grounding_impedance.json" }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

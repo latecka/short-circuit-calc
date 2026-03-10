@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://short-circuit-calc/schemas/autotransformer.json",
+  "title": "Autotransformer",
+  "description": "Autotransformer with galvanic coupling",
+  "type": "object",
+  "required": [
+    "id", "type", "bus_hv", "bus_lv",
+    "Sn", "Un_hv", "Un_lv", "uk_percent", "Pkr",
+    "vector_group", "has_tertiary_delta", "neutral_grounding", "Z0_source"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "type": {
+      "const": "autotransformer"
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Descriptive name"
+    },
+    "bus_hv": {
+      "type": "string",
+      "description": "High voltage side busbar ID"
+    },
+    "bus_lv": {
+      "type": "string",
+      "description": "Low voltage side busbar ID"
+    },
+    "Sn": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated apparent power [MVA]"
+    },
+    "Un_hv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage HV side [kV]"
+    },
+    "Un_lv": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Rated voltage LV side [kV]"
+    },
+    "uk_percent": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "exclusiveMaximum": 100,
+      "description": "Short-circuit voltage [%]"
+    },
+    "Pkr": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Short-circuit losses [kW]"
+    },
+    "vector_group": {
+      "type": "string",
+      "pattern": "^YNa[0-9]{1,2}$",
+      "description": "Vector group (e.g., YNa0)"
+    },
+    "has_tertiary_delta": {
+      "type": "boolean",
+      "description": "Has stabilizing delta tertiary winding"
+    },
+    "tertiary_Sn": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "description": "Tertiary winding rated power [MVA] - required if has_tertiary_delta"
+    },
+    "neutral_grounding": {
+      "enum": ["grounded", "isolated", "impedance"],
+      "description": "Neutral point grounding"
+    },
+    "grounding_impedance_id": {
+      "type": ["string", "null"],
+      "description": "Grounding impedance element ID - required if neutral_grounding=impedance"
+    },
+    "Z0_source": {
+      "enum": ["measured", "derived"],
+      "description": "Source of Z0 data"
+    },
+    "Z0_measured_r": {
+      "type": ["number", "null"],
+      "description": "Measured R0 [ohm] - required if Z0_source=measured"
+    },
+    "Z0_measured_x": {
+      "type": ["number", "null"],
+      "description": "Measured X0 [ohm] - required if Z0_source=measured"
+    },
+    "tap_position": {
+      "type": "number",
+      "minimum": -20,
+      "maximum": 20,
+      "default": 0,
+      "description": "Tap position [%]"
+    },
+    "in_service": {
+      "type": "boolean",
+      "default": true,
+      "description": "Element in service"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "has_tertiary_delta": { "const": true } }
+      },
+      "then": {
+        "required": ["tertiary_Sn"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "neutral_grounding": { "const": "impedance" } }
+      },
+      "then": {
+        "required": ["grounding_impedance_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "Z0_source": { "const": "measured" } }
+      },
+      "then": {
+        "required": ["Z0_measured_r", "Z0_measured_x"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
