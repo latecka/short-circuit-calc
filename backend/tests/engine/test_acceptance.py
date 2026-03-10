@@ -1304,6 +1304,93 @@ class TestT13d_AutotransformerMesh:
         assert result.Ik > 0
 
 
+class TestValidation_LineVoltageMismatch:
+    """Test validation: line cannot connect buses with different voltage levels."""
+
+    def test_line_voltage_mismatch_blocks_calculation(self):
+        """Test that line connecting buses with different Un blocks calculation."""
+        net = Network(name="Invalid - Line Voltage Mismatch")
+
+        # Two buses with DIFFERENT voltage levels
+        net.add_element(Busbar(id="bus_110", Un=110.0))
+        net.add_element(Busbar(id="bus_22", Un=22.0))
+
+        net.add_element(ExternalGrid(
+            id="grid",
+            bus_id="bus_110",
+            Sk_max=2000.0,
+            Sk_min=1500.0,
+            rx_ratio=0.1,
+        ))
+
+        # INVALID: Line connecting 110 kV bus to 22 kV bus
+        # Lines can only connect buses at the same voltage level
+        net.add_element(Line(
+            id="line_invalid",
+            bus_from="bus_110",
+            bus_to="bus_22",
+            length=10.0,
+            r1_per_km=0.1,
+            x1_per_km=0.4,
+            r0_per_km=0.3,
+            x0_per_km=1.2,
+        ))
+
+        # Calculation should fail with clear error message
+        run = calculate_short_circuit(
+            network=net,
+            fault_types=["Ik3"],
+            fault_buses=["bus_22"],
+            mode="max"
+        )
+
+        # Calculation should NOT succeed
+        assert not run.is_success, "Calculation should fail for invalid topology"
+
+        # Error message should mention the voltage mismatch
+        error_text = " ".join(run.errors)
+        assert "line_invalid" in error_text, "Error should mention the invalid line"
+        assert "110" in error_text and "22" in error_text, "Error should mention both voltage levels"
+
+    def test_line_same_voltage_passes_validation(self):
+        """Test that line connecting buses with same Un passes validation."""
+        net = Network(name="Valid - Line Same Voltage")
+
+        # Two buses with SAME voltage level
+        net.add_element(Busbar(id="bus_A", Un=110.0))
+        net.add_element(Busbar(id="bus_B", Un=110.0))
+
+        net.add_element(ExternalGrid(
+            id="grid",
+            bus_id="bus_A",
+            Sk_max=2000.0,
+            Sk_min=1500.0,
+            rx_ratio=0.1,
+        ))
+
+        # VALID: Line connecting two 110 kV buses
+        net.add_element(Line(
+            id="line_valid",
+            bus_from="bus_A",
+            bus_to="bus_B",
+            length=50.0,
+            r1_per_km=0.1,
+            x1_per_km=0.4,
+            r0_per_km=0.3,
+            x0_per_km=1.2,
+        ))
+
+        run = calculate_short_circuit(
+            network=net,
+            fault_types=["Ik3"],
+            fault_buses=["bus_B"],
+            mode="max"
+        )
+
+        assert run.is_success, f"Calculation should succeed: {run.errors}"
+        assert run.results[0].Ik > 0
+
+
 # Run tests with pytest
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

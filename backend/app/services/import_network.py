@@ -294,6 +294,30 @@ def validate_elements(elements: dict[str, Any]) -> tuple[dict[str, Any], list[di
                 'error': f"Referenced transformer '{psu['transformer_id']}' does not exist",
             })
 
+    # Build bus voltage lookup for topology validation
+    bus_voltages = {bus['id']: bus['Un'] for bus in validated.get('busbars', [])}
+
+    # Validate lines: cannot connect buses with different voltage levels
+    for i, line in enumerate(validated.get('lines', [])):
+        bus_from = line.get('bus_from')
+        bus_to = line.get('bus_to')
+
+        if bus_from in bus_voltages and bus_to in bus_voltages:
+            un_from = bus_voltages[bus_from]
+            un_to = bus_voltages[bus_to]
+
+            if un_from != un_to:
+                errors.append({
+                    'type': 'lines',
+                    'index': i,
+                    'id': line['id'],
+                    'error': (
+                        f"Vedenie '{line['id']}' spája uzly s rôznymi napäťovými hladinami: "
+                        f"{bus_from} ({un_from} kV) → {bus_to} ({un_to} kV). "
+                        f"Vedenia môžu spájať len uzly s rovnakým Un."
+                    ),
+                })
+
     return validated, errors
 
 

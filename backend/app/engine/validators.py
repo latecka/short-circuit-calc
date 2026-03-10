@@ -242,6 +242,19 @@ class NetworkValidator:
                 element_id=line.id, field="x0_per_km"
             ))
 
+        # Validate that both buses have the same nominal voltage
+        bus_from = self.network.get_bus(line.bus_from)
+        bus_to = self.network.get_bus(line.bus_to)
+
+        if bus_from and bus_to and bus_from.Un != bus_to.Un:
+            self.errors.append(ValidationMessage(
+                ErrorCode.E005.value,
+                f"Vedenie '{line.id}' spája uzly s rôznymi napäťovými hladinami: "
+                f"{line.bus_from} ({bus_from.Un} kV) → {line.bus_to} ({bus_to.Un} kV). "
+                f"Vedenia môžu spájať len uzly s rovnakým Un.",
+                element_id=line.id
+            ))
+
     def _validate_transformer_2w(self, tr: Transformer2W) -> None:
         """Validate 2-winding transformer."""
         if tr.Sn <= 0:
