@@ -36,6 +36,20 @@ export default function ProjectDetail() {
   const [calcResult, setCalcResult] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [metadata, setMetadata] = useState({
+    client_name: '',
+    client_address: '',
+    contractor_name: '',
+    contractor_address: '',
+    author: '',
+    checker: '',
+    project_number: '',
+    project_location: '',
+    revision: '',
+    notes: '',
+  });
+  const [savingMetadata, setSavingMetadata] = useState(false);
 
   useEffect(() => {
     loadProject();
@@ -49,6 +63,20 @@ export default function ProjectDetail() {
       ]);
       setProject(projectData);
       setVersions(versionsData);
+
+      // Load metadata from project
+      setMetadata({
+        client_name: projectData.client_name || '',
+        client_address: projectData.client_address || '',
+        contractor_name: projectData.contractor_name || '',
+        contractor_address: projectData.contractor_address || '',
+        author: projectData.author || '',
+        checker: projectData.checker || '',
+        project_number: projectData.project_number || '',
+        project_location: projectData.project_location || '',
+        revision: projectData.revision || '',
+        notes: projectData.notes || '',
+      });
 
       if (versionsData.length > 0) {
         const latestVersion = versionsData[versionsData.length - 1];
@@ -175,6 +203,24 @@ export default function ProjectDetail() {
     await loadVersion(result.version_id);
   };
 
+  const handleMetadataChange = (field, value) => {
+    setMetadata(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveMetadata = async () => {
+    setSavingMetadata(true);
+    try {
+      const updatedProject = await projectsApi.update(projectId, metadata);
+      setProject(updatedProject);
+      alert('Metadata boli uložené');
+    } catch (err) {
+      console.error('Failed to save metadata:', err);
+      alert('Uloženie metadát zlyhalo');
+    } finally {
+      setSavingMetadata(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -223,6 +269,107 @@ export default function ProjectDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Metadata Section */}
+      <Card className="mb-6">
+        <CardHeader>
+          <button
+            onClick={() => setShowMetadata(!showMetadata)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <h2 className="text-lg font-semibold">Metadata projektu</h2>
+            <svg
+              className={`w-5 h-5 transform transition-transform ${showMetadata ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </CardHeader>
+        {showMetadata && (
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <Input
+                  label="Objednávateľ"
+                  value={metadata.client_name}
+                  onChange={(e) => handleMetadataChange('client_name', e.target.value)}
+                  placeholder="Názov objednávateľa"
+                />
+                <Input
+                  label="Adresa objednávateľa"
+                  value={metadata.client_address}
+                  onChange={(e) => handleMetadataChange('client_address', e.target.value)}
+                  placeholder="Adresa"
+                />
+                <Input
+                  label="Zhotoviteľ"
+                  value={metadata.contractor_name}
+                  onChange={(e) => handleMetadataChange('contractor_name', e.target.value)}
+                  placeholder="Názov zhotoviteľa"
+                />
+                <Input
+                  label="Adresa zhotoviteľa"
+                  value={metadata.contractor_address}
+                  onChange={(e) => handleMetadataChange('contractor_address', e.target.value)}
+                  placeholder="Adresa"
+                />
+                <Input
+                  label="Číslo projektu"
+                  value={metadata.project_number}
+                  onChange={(e) => handleMetadataChange('project_number', e.target.value)}
+                  placeholder="napr. PRJ-2026-001"
+                />
+              </div>
+              <div className="space-y-4">
+                <Input
+                  label="Miesto stavby"
+                  value={metadata.project_location}
+                  onChange={(e) => handleMetadataChange('project_location', e.target.value)}
+                  placeholder="Lokalita projektu"
+                />
+                <Input
+                  label="Vypracoval"
+                  value={metadata.author}
+                  onChange={(e) => handleMetadataChange('author', e.target.value)}
+                  placeholder="Meno autora"
+                />
+                <Input
+                  label="Kontroloval"
+                  value={metadata.checker}
+                  onChange={(e) => handleMetadataChange('checker', e.target.value)}
+                  placeholder="Meno kontrolóra"
+                />
+                <Input
+                  label="Revízia"
+                  value={metadata.revision}
+                  onChange={(e) => handleMetadataChange('revision', e.target.value)}
+                  placeholder="napr. A, B, 1.0"
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Poznámky
+                  </label>
+                  <textarea
+                    value={metadata.notes}
+                    onChange={(e) => handleMetadataChange('notes', e.target.value)}
+                    placeholder="Dodatočné poznámky..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button onClick={handleSaveMetadata} loading={savingMetadata}>
+                Uložiť metadata
+              </Button>
+            </div>
+          </CardBody>
+        )}
+      </Card>
 
       {/* Editor */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

@@ -82,6 +82,21 @@ class NetworkElementsSchema(BaseModel):
     grounding_impedances: list[dict[str, Any]] = []
 
 
+# Project metadata schema
+class ProjectMetadata(BaseModel):
+    """Project metadata fields."""
+    client_name: str | None = None
+    client_address: str | None = None
+    contractor_name: str | None = None
+    contractor_address: str | None = None
+    author: str | None = None
+    checker: str | None = None
+    project_number: str | None = None
+    project_location: str | None = None
+    revision: str | None = None
+    notes: str | None = None
+
+
 # Project schemas
 class ProjectBase(BaseModel):
     """Base project schema."""
@@ -98,6 +113,17 @@ class ProjectUpdate(BaseModel):
     """Project update schema."""
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
+    # Metadata fields
+    client_name: str | None = None
+    client_address: str | None = None
+    contractor_name: str | None = None
+    contractor_address: str | None = None
+    author: str | None = None
+    checker: str | None = None
+    project_number: str | None = None
+    project_location: str | None = None
+    revision: str | None = None
+    notes: str | None = None
 
 
 class ProjectResponse(ProjectBase):
@@ -107,6 +133,17 @@ class ProjectResponse(ProjectBase):
     created_at: datetime
     updated_at: datetime
     version_count: int = 0
+    # Metadata fields
+    client_name: str | None = None
+    client_address: str | None = None
+    contractor_name: str | None = None
+    contractor_address: str | None = None
+    author: str | None = None
+    checker: str | None = None
+    project_number: str | None = None
+    project_location: str | None = None
+    revision: str | None = None
+    notes: str | None = None
 
     model_config = {"from_attributes": True}
 

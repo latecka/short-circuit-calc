@@ -33,6 +33,18 @@ class Project(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    # Project metadata fields
+    client_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contractor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contractor_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    checker: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    project_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    project_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    revision: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="projects")
     versions: Mapped[list["NetworkVersion"]] = relationship(

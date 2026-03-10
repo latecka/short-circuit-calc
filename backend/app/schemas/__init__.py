@@ -7,6 +7,7 @@ from .project import (
     ProjectUpdate,
     ProjectResponse,
     ProjectListResponse,
+    ProjectMetadata,
     NetworkVersionCreate,
     NetworkVersionResponse,
     NetworkVersionDetailResponse,

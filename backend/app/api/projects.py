@@ -36,6 +36,17 @@ def _project_to_response(project: Project) -> ProjectResponse:
         created_at=project.created_at,
         updated_at=project.updated_at,
         version_count=len(project.versions),
+        # Metadata fields
+        client_name=project.client_name,
+        client_address=project.client_address,
+        contractor_name=project.contractor_name,
+        contractor_address=project.contractor_address,
+        author=project.author,
+        checker=project.checker,
+        project_number=project.project_number,
+        project_location=project.project_location,
+        revision=project.revision,
+        notes=project.notes,
     )
 
 
@@ -145,6 +156,27 @@ def update_project(
         project.name = data.name
     if data.description is not None:
         project.description = data.description
+    # Update metadata fields
+    if data.client_name is not None:
+        project.client_name = data.client_name
+    if data.client_address is not None:
+        project.client_address = data.client_address
+    if data.contractor_name is not None:
+        project.contractor_name = data.contractor_name
+    if data.contractor_address is not None:
+        project.contractor_address = data.contractor_address
+    if data.author is not None:
+        project.author = data.author
+    if data.checker is not None:
+        project.checker = data.checker
+    if data.project_number is not None:
+        project.project_number = data.project_number
+    if data.project_location is not None:
+        project.project_location = data.project_location
+    if data.revision is not None:
+        project.revision = data.revision
+    if data.notes is not None:
+        project.notes = data.notes
 
     db.commit()
     db.refresh(project)

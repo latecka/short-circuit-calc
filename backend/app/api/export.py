@@ -1,11 +1,14 @@
 """Export API endpoints."""
 
-from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import StreamingResponse
+from io import BytesIO
+
+from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse, Response
 
 from app.api.deps import DBSession, CurrentUser
 from app.models import CalculationRun, Project, NetworkVersion, AuditAction
 from app.services import export_pdf, export_xlsx
+from app.services.network_schema import generate_network_schema
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/export", tags=["export"])
@@ -92,6 +95,44 @@ def export_xlsx_report(
     return StreamingResponse(
         xlsx_buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get("/schema/{run_id}")
+def export_network_schema(
+    run_id: str,
+    db: DBSession,
+    current_user: CurrentUser,
+    format: str = Query("svg", pattern="^(svg|png)$"),
+):
+    """Export network schema as SVG or PNG diagram."""
+    run, project, version = _get_calculation_data(db, run_id, current_user)
+
+    # Get network elements
+    elements = version.elements or {}
+
+    # Get results for display on diagram
+    results = run.results if run.results else None
+
+    # Generate schema
+    schema_bytes = generate_network_schema(
+        elements=elements,
+        results=results,
+        format=format,
+    )
+
+    # Determine media type
+    media_type = "image/svg+xml" if format == "svg" else "image/png"
+
+    # Create filename
+    filename = f"schema_{project.name.replace(' ', '_')}_v{version.version_number}.{format}"
+
+    return Response(
+        content=schema_bytes,
+        media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
