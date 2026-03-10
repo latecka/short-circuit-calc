@@ -133,13 +133,30 @@ class GeneratorImport(BaseModel):
     id: str
     name: str | None = None
     bus_id: str
-    Sn: float = Field(..., gt=0)
-    Un: float = Field(..., gt=0)
-    Xd_pp: float = Field(..., gt=0)
-    Ra: float = 0
+    Sn: float = Field(..., gt=0)  # MVA
+    Un: float = Field(..., gt=0)  # kV
+    Xd_pp: float = Field(..., gt=0)  # % (will auto-convert from p.u. if < 1)
+    Ra: float = 0  # % (will auto-convert from p.u. if < 1)
     cos_phi: float = Field(0.85, gt=0, le=1)
     connection: str = "direct"
     in_service: bool = True
+
+    @field_validator('Xd_pp')
+    @classmethod
+    def convert_xdpp_to_percent(cls, v):
+        """Convert Xd'' from p.u. to % if value is < 1 (assumes p.u. input)."""
+        # Typical Xd'' values are 10-30%, so if < 1 it's likely in p.u.
+        if v < 1.0:
+            return v * 100
+        return v
+
+    @field_validator('Ra')
+    @classmethod
+    def convert_ra_to_percent(cls, v):
+        """Convert Ra from p.u. to % if value is < 1 (assumes p.u. input)."""
+        if v > 0 and v < 1.0:
+            return v * 100
+        return v
 
 
 class MotorImport(BaseModel):
