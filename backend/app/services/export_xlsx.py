@@ -91,9 +91,9 @@ def generate_calculation_report(
     # Data rows
     row = header_row + 1
     for bus_id, faults in sorted(results_by_bus.items()):
-        ik3 = faults.get('IK3')
-        ik2 = faults.get('IK2')
-        ik1 = faults.get('IK1')
+        ik3 = faults.get('Ik3')
+        ik2 = faults.get('Ik2')
+        ik1 = faults.get('Ik1')
 
         ws_summary.cell(row=row, column=1, value=bus_id).border = thin_border
 
@@ -138,9 +138,9 @@ def generate_calculation_report(
             cell.border = thin_border
         row += 1
 
-        ik3 = faults.get('IK3')
-        ik2 = faults.get('IK2')
-        ik1 = faults.get('IK1')
+        ik3 = faults.get('Ik3')
+        ik2 = faults.get('Ik2')
+        ik1 = faults.get('Ik1')
 
         # Data rows
         params = [
