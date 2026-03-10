@@ -25,7 +25,7 @@ from app.schemas import (
     ImpedanceSchema,
 )
 from app.engine.network import Network
-from app.engine.iec60909 import IEC60909Calculator
+from app.engine.iec60909 import ShortCircuitCalculator as IEC60909Calculator
 
 router = APIRouter(prefix="/calculations", tags=["calculations"])
 
