@@ -356,57 +356,45 @@ def run_calculation(
             if bus_id not in network.busbars:
                 raise ValueError(f"Bus '{bus_id}' not found in network")
 
-        # Create calculator
-        is_max = data.calculation_mode == "max"
-        calculator = IEC60909Calculator(network, is_max=is_max)
+        # Create calculator and run calculations
+        calculator = IEC60909Calculator(network)
+        mode = "max" if data.calculation_mode.value == "max" else "min"
+        calc_run = calculator.calculate(
+            fault_types=[ft.value for ft in data.fault_types],
+            fault_buses=data.fault_buses,
+            mode=mode,
+        )
 
-        # Run calculations
-        for fault_type in data.fault_types:
-            for bus_id in data.fault_buses:
-                try:
-                    result_data = calculator.calculate(bus_id, fault_type.value)
+        # Check for calculation errors
+        if calc_run.errors:
+            raise ValueError("; ".join(calc_run.errors))
 
-                    # Map fault type to enum
-                    ft_enum = FaultType.IK3
-                    if fault_type.value == "Ik2":
-                        ft_enum = FaultType.IK2
-                    elif fault_type.value == "Ik1":
-                        ft_enum = FaultType.IK1
+        # Process results
+        for fault_result in calc_run.results:
+            # Map fault type to enum
+            ft_enum = FaultType.IK3
+            if fault_result.fault_type == "Ik2":
+                ft_enum = FaultType.IK2
+            elif fault_result.fault_type == "Ik1":
+                ft_enum = FaultType.IK1
 
-                    result = RunResult(
-                        run_id=run.id,
-                        bus_id=bus_id,
-                        fault_type=ft_enum,
-                        Ik=result_data["Ik"],
-                        ip=result_data["ip"],
-                        R_X_ratio=result_data["R_X_ratio"],
-                        c_factor=result_data["c_factor"],
-                        Zk=result_data["Zk"],
-                        Z1=result_data["Z1"],
-                        Z2=result_data["Z2"],
-                        Z0=result_data.get("Z0"),
-                        correction_factors=result_data.get("correction_factors", {}),
-                        warnings=result_data.get("warnings", []),
-                        assumptions=result_data.get("assumptions", []),
-                    )
-                    db.add(result)
-
-                except Exception as e:
-                    # Log error but continue with other calculations
-                    result = RunResult(
-                        run_id=run.id,
-                        bus_id=bus_id,
-                        fault_type=ft_enum,
-                        Ik=0.0,
-                        ip=0.0,
-                        R_X_ratio=0.0,
-                        c_factor=1.0,
-                        Zk={"r": 0, "x": 0},
-                        Z1={"r": 0, "x": 0},
-                        Z2={"r": 0, "x": 0},
-                        warnings=[f"Calculation failed: {str(e)}"],
-                    )
-                    db.add(result)
+            result = RunResult(
+                run_id=run.id,
+                bus_id=fault_result.bus_id,
+                fault_type=ft_enum,
+                Ik=fault_result.Ik,
+                ip=fault_result.ip,
+                R_X_ratio=fault_result.R_X_ratio,
+                c_factor=fault_result.c_factor,
+                Zk={"r": fault_result.Zk.r, "x": fault_result.Zk.x},
+                Z1={"r": fault_result.Z1.r, "x": fault_result.Z1.x},
+                Z2={"r": fault_result.Z2.r, "x": fault_result.Z2.x},
+                Z0={"r": fault_result.Z0.r, "x": fault_result.Z0.x} if fault_result.Z0 else None,
+                correction_factors=fault_result.correction_factors,
+                warnings=fault_result.warnings,
+                assumptions=fault_result.assumptions,
+            )
+            db.add(result)
 
         run.status = CalculationStatus.COMPLETED
         run.completed_at = datetime.utcnow()

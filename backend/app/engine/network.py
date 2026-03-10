@@ -65,6 +65,11 @@ class Network:
     _buses: Dict[str, Busbar] = field(default_factory=dict)
     _adjacency: Dict[str, Set[str]] = field(default_factory=dict)
 
+    @property
+    def busbars(self) -> Dict[str, Busbar]:
+        """Public access to buses (alias for _buses)."""
+        return self._buses
+
     def add_element(self, element: ElementType) -> None:
         """Add element to network."""
         self.elements[element.id] = element

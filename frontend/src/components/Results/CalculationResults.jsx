@@ -7,7 +7,34 @@ export default function CalculationResults({ result }) {
   const [selectedFaultType, setSelectedFaultType] = useState('all');
   const [exporting, setExporting] = useState(null);
 
-  if (!result || !result.results || result.results.length === 0) {
+  if (!result) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        Žiadne výsledky
+      </div>
+    );
+  }
+
+  // Show error message if calculation failed
+  if (result.status === 'failed' || result.error_message) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            Zlyhal
+          </span>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-red-800 mb-2">Chyba výpočtu:</h4>
+          <p className="text-sm text-red-700 font-mono whitespace-pre-wrap">
+            {result.error_message || 'Neznáma chyba'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!result.results || result.results.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
         Žiadne výsledky

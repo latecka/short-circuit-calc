@@ -135,6 +135,7 @@ export default function ProjectDetail() {
     }
 
     setCalculating(true);
+    setCalcResult(null);
     try {
       const result = await calculationsApi.run(
         versionId,
@@ -146,6 +147,11 @@ export default function ProjectDetail() {
       const fullResult = await calculationsApi.get(result.id);
       setCalcResult(fullResult);
       setShowCalcModal(false);
+
+      // Show error if calculation failed
+      if (fullResult.status === 'failed' && fullResult.error_message) {
+        alert('Výpočet zlyhal: ' + fullResult.error_message);
+      }
     } catch (err) {
       console.error('Calculation failed:', err);
       alert('Výpočet zlyhal: ' + (err.response?.data?.detail || err.message));
