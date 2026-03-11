@@ -517,6 +517,10 @@ def import_from_json(data: bytes | str) -> dict[str, Any]:
     """
     Import network elements from JSON.
 
+    Supports two formats:
+    1. Direct elements: {"busbars": [...], "lines": [...], ...}
+    2. Export format: {"export_version": "1.0", "network_elements": {...}, ...}
+
     Args:
         data: JSON string or bytes
 
@@ -529,12 +533,19 @@ def import_from_json(data: bytes | str) -> dict[str, Any]:
     try:
         if isinstance(data, bytes):
             data = data.decode('utf-8')
-        raw_elements = json.loads(data)
+        raw_data = json.loads(data)
     except json.JSONDecodeError as e:
         raise ImportError(f"Invalid JSON: {e}")
 
-    if not isinstance(raw_elements, dict):
+    if not isinstance(raw_data, dict):
         raise ImportError("JSON must be an object with element arrays")
+
+    # Check if this is export format (has network_elements wrapper)
+    if 'network_elements' in raw_data and isinstance(raw_data['network_elements'], dict):
+        raw_elements = raw_data['network_elements']
+    else:
+        # Direct elements format
+        raw_elements = raw_data
 
     # Normalize field names from alternative formats
     normalized = normalize_elements(raw_elements)

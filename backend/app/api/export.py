@@ -137,3 +137,59 @@ def export_network_schema(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+@router.get("/network/{project_id}")
+def export_network_xlsx(
+    project_id: str,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Export network elements as XLSX backup file."""
+    # Check project ownership
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == current_user.id,
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Get latest version
+    version = db.query(NetworkVersion).filter(
+        NetworkVersion.project_id == project_id,
+    ).order_by(NetworkVersion.version_number.desc()).first()
+
+    if not version:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No network version found",
+        )
+
+    # Generate XLSX with network elements
+    xlsx_buffer = export_xlsx.generate_network_backup(version.elements or {})
+
+    # Log export
+    log_action(
+        db,
+        AuditAction.EXPORT_XLSX,
+        user_id=current_user.id,
+        resource_type="project",
+        resource_id=project_id,
+        details={"project_name": project.name, "type": "network_backup"},
+    )
+
+    # Create filename
+    from datetime import date
+    filename = f"{project.name.replace(' ', '_')}_backup_{date.today().isoformat()}.xlsx"
+
+    return StreamingResponse(
+        xlsx_buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

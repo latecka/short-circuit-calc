@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { projectsApi, calculationsApi } from '../api/client';
 import Layout from '../components/Layout';
 import NetworkEditor from '../components/NetworkEditor/NetworkEditor';
@@ -7,12 +7,17 @@ import ImportModal from '../components/NetworkEditor/ImportModal';
 import CalculationResults from '../components/Results/CalculationResults';
 import { Button, Card, CardHeader, CardBody, Modal, Input, Select } from '../components/ui';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function ProjectDetail() {
   const { projectId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [versions, setVersions] = useState([]);
   const [currentVersion, setCurrentVersion] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef(null);
   const [elements, setElements] = useState({
     busbars: [],
     external_grids: [],
@@ -79,8 +84,21 @@ export default function ProjectDetail() {
       });
 
       if (versionsData.length > 0) {
-        const latestVersion = versionsData[versionsData.length - 1];
-        await loadVersion(latestVersion.id);
+        // Check if specific version requested via URL param
+        const requestedVersionId = searchParams.get('version');
+        if (requestedVersionId) {
+          const requestedVersion = versionsData.find(v => v.id === requestedVersionId);
+          if (requestedVersion) {
+            await loadVersion(requestedVersion.id);
+          } else {
+            // Version not found, load latest
+            const latestVersion = versionsData[versionsData.length - 1];
+            await loadVersion(latestVersion.id);
+          }
+        } else {
+          const latestVersion = versionsData[versionsData.length - 1];
+          await loadVersion(latestVersion.id);
+        }
       }
     } catch (err) {
       console.error('Failed to load project:', err);
@@ -221,6 +239,75 @@ export default function ProjectDetail() {
     }
   };
 
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getExportFilename = (extension) => {
+    const date = new Date().toISOString().split('T')[0];
+    const safeName = (project?.name || 'projekt').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${safeName}_backup_${date}.${extension}`;
+  };
+
+  const handleExportJSON = () => {
+    const exportData = {
+      export_version: '1.0',
+      exported_at: new Date().toISOString(),
+      project: {
+        name: project?.name || '',
+        description: project?.description || '',
+        created_at: project?.created_at || '',
+        updated_at: project?.updated_at || '',
+      },
+      network_elements: elements,
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getExportFilename('json');
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    setShowExportMenu(false);
+  };
+
+  const handleExportXLSX = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/v1/export/network/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getExportFilename('xlsx');
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Export XLSX zlyhal');
+    }
+    setShowExportMenu(false);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -253,6 +340,47 @@ export default function ProjectDetail() {
             </svg>
             Import
           </Button>
+
+          {/* Export Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Záloha
+              <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </Button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                <div className="py-1">
+                  <button
+                    onClick={handleExportJSON}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Stiahnuť JSON
+                  </button>
+                  <button
+                    onClick={handleExportXLSX}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Stiahnuť XLSX
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <Button
             variant="secondary"
             onClick={handleSave}

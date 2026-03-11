@@ -247,3 +247,76 @@ def generate_calculation_report(
     wb.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+def generate_network_backup(elements: dict) -> BytesIO:
+    """
+    Generate XLSX backup file for network elements.
+
+    Same structure as import template - one sheet per element type.
+    """
+    wb = Workbook()
+
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    header_alignment = Alignment(horizontal="center")
+    number_font = Font(name="Consolas")
+    number_alignment = Alignment(horizontal="right")
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # Sheet definitions - must match import template structure
+    sheets = [
+        ('Busbars', 'busbars', ['id', 'name', 'Un', 'is_reference']),
+        ('External Grids', 'external_grids', ['id', 'name', 'bus_id', 'Sk_max', 'Sk_min', 'rx_ratio', 'c_max', 'c_min', 'Z0_Z1_ratio', 'X0_X1_ratio']),
+        ('Lines', 'lines', ['id', 'name', 'type', 'bus_from', 'bus_to', 'length', 'r1_per_km', 'x1_per_km', 'r0_per_km', 'x0_per_km', 'parallel_lines', 'in_service']),
+        ('Transformers 2W', 'transformers_2w', ['id', 'name', 'bus_hv', 'bus_lv', 'Sn', 'Un_hv', 'Un_lv', 'uk_percent', 'Pkr', 'vector_group', 'tap_position', 'neutral_grounding_hv', 'neutral_grounding_lv', 'in_service']),
+        ('Transformers 3W', 'transformers_3w', ['id', 'name', 'bus_hv', 'bus_mv', 'bus_lv', 'Sn_hv', 'Sn_mv', 'Sn_lv', 'Un_hv', 'Un_mv', 'Un_lv', 'uk_hv_mv_percent', 'uk_hv_lv_percent', 'uk_mv_lv_percent', 'Pkr_hv_mv', 'Pkr_hv_lv', 'Pkr_mv_lv', 'in_service']),
+        ('Autotransformers', 'autotransformers', ['id', 'name', 'bus_hv', 'bus_lv', 'Sn', 'Un_hv', 'Un_lv', 'uk_percent', 'Pkr', 'neutral_grounding', 'has_tertiary_delta', 'tertiary_Sn', 'in_service']),
+        ('Generators', 'generators', ['id', 'name', 'bus_id', 'Sn', 'Un', 'Xd_pp', 'Ra', 'cos_phi', 'connection', 'in_service']),
+        ('Motors', 'motors', ['id', 'name', 'bus_id', 'Un', 'input_mode', 'Pn', 'eta', 'cos_phi', 'In', 'Ia_In', 'pole_pairs', 'include_in_sc', 'in_service']),
+        ('PSU', 'psus', ['id', 'name', 'generator_id', 'transformer_id', 'has_oltc', 'generator_winding']),
+        ('Impedances', 'impedances', ['id', 'name', 'bus_from', 'bus_to', 'R', 'X', 'R0', 'X0', 'in_service']),
+        ('Grounding Impedances', 'grounding_impedances', ['id', 'name', 'R', 'X']),
+    ]
+
+    # Remove default sheet
+    wb.remove(wb.active)
+
+    for sheet_name, elem_key, columns in sheets:
+        ws = wb.create_sheet(sheet_name)
+
+        # Write header
+        for col, header in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+            ws.column_dimensions[get_column_letter(col)].width = 15
+
+        # Write data
+        items = elements.get(elem_key, [])
+        for row_idx, item in enumerate(items, 2):
+            for col_idx, key in enumerate(columns, 1):
+                val = item.get(key, "")
+
+                # Convert bool to string for Excel
+                if isinstance(val, bool):
+                    val = "true" if val else "false"
+
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.border = thin_border
+                if isinstance(val, (int, float)):
+                    cell.font = number_font
+                    cell.alignment = number_alignment
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer

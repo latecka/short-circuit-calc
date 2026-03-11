@@ -95,10 +95,14 @@ export default function ImportModal({ isOpen, onClose, projectId, onImportSucces
     }
   };
 
-  const handleDownloadTemplate = async () => {
+  const handleDownloadTemplate = async (format = 'xlsx') => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/v1/import/template`, {
+      const endpoint = format === 'json'
+        ? `${API_URL}/api/v1/import/template/json`
+        : `${API_URL}/api/v1/import/template`;
+
+      const response = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -106,7 +110,7 @@ export default function ImportModal({ isOpen, onClose, projectId, onImportSucces
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'network_template.xlsx';
+      a.download = format === 'json' ? 'network_template.json' : 'network_template.xlsx';
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -155,16 +159,24 @@ export default function ImportModal({ isOpen, onClose, projectId, onImportSucces
         </div>
 
         {/* Template download */}
-        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-          <span className="text-sm text-gray-600">
-            Potrebujete šablónu pre Excel import?
-          </span>
-          <Button variant="ghost" size="sm" onClick={handleDownloadTemplate}>
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Stiahnuť šablónu
-          </Button>
+        <div className="p-3 bg-gray-50 rounded-lg">
+          <div className="text-sm text-gray-600 mb-2">
+            Stiahnite si vzorovú šablónu:
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={() => handleDownloadTemplate('xlsx')}>
+              <svg className="w-4 h-4 mr-1 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Vzor XLSX
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleDownloadTemplate('json')}>
+              <svg className="w-4 h-4 mr-1 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Vzor JSON
+            </Button>
+          </div>
         </div>
 
         {/* Validation status */}
