@@ -13,9 +13,15 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     PageBreak, Image, KeepTogether
 )
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 from app.models import CalculationRun, Project, NetworkVersion
 from app.services.network_schema import generate_network_schema
+
+# Register DejaVu fonts for Unicode/diacritics support
+pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
 
 
 def generate_calculation_report(
@@ -45,7 +51,7 @@ def generate_calculation_report(
         fontSize=18,
         spaceAfter=6*mm,
         alignment=TA_CENTER,
-        fontName='Helvetica-Bold',
+        fontName='DejaVu-Bold',
     )
 
     heading1_style = ParagraphStyle(
@@ -54,7 +60,7 @@ def generate_calculation_report(
         fontSize=14,
         spaceBefore=8*mm,
         spaceAfter=4*mm,
-        fontName='Helvetica-Bold',
+        fontName='DejaVu-Bold',
     )
 
     heading2_style = ParagraphStyle(
@@ -63,7 +69,7 @@ def generate_calculation_report(
         fontSize=12,
         spaceBefore=6*mm,
         spaceAfter=3*mm,
-        fontName='Helvetica-Bold',
+        fontName='DejaVu-Bold',
     )
 
     normal_style = ParagraphStyle(
@@ -93,7 +99,7 @@ def generate_calculation_report(
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563EB')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), 'DejaVu-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
@@ -156,7 +162,7 @@ def generate_calculation_report(
     if info_data:
         info_table = Table(info_data, colWidths=[45*mm, 100*mm])
         info_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (0, -1), 'DejaVu-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
@@ -201,7 +207,7 @@ def generate_calculation_report(
 
     story.append(Paragraph("1.1 Rozsah výpočtu", heading2_style))
 
-    mode_text = "Maximum (Ik max)" if run.calculation_mode.value == "MAX" else "Minimum (Ik min)"
+    mode_text = "Maximum (Ik max)" if run.calculation_mode.value == "max" else "Minimum (Ik min)"
     fault_types_text = ", ".join(run.fault_types)
 
     scope_text = f"""
@@ -459,7 +465,7 @@ def generate_calculation_report(
         canvas.line(20*mm, height - 20*mm, width - 20*mm, height - 20*mm)
 
         # Header text
-        canvas.setFont('Helvetica', 8)
+        canvas.setFont('DejaVu', 8)
         canvas.setFillColor(colors.gray)
 
         if project.project_number:

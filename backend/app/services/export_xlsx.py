@@ -55,7 +55,7 @@ def generate_calculation_report(
         ("Projekt:", project.name),
         ("Popis:", project.description or "-"),
         ("Verzia siete:", f"v{version.version_number}"),
-        ("Režim výpočtu:", "Maximum (Ik max)" if run.calculation_mode.value == "MAX" else "Minimum (Ik min)"),
+        ("Režim výpočtu:", "Maximum (Ik max)" if run.calculation_mode.value == "max" else "Minimum (Ik min)"),
         ("Typy porúch:", ", ".join(run.fault_types)),
         ("Dátum výpočtu:", run.completed_at.strftime("%d.%m.%Y %H:%M") if run.completed_at else "-"),
         ("Engine verzia:", run.engine_version),
