@@ -363,9 +363,9 @@ class ShortCircuitCalculator:
                 else:
                     # Direct connection - apply KG per IEC 60909-0 eq. 17
                     # ZG = KG * (RG + j*Xd'')
-                    c = get_c_factor(Un, is_max)
+                    c = get_c_factor(source.Un, is_max)  # Use generator voltage for c factor
                     Z1_base, Z2_base, Z0 = source.get_impedance(Un)
-                    KG = source.get_KG(Un, c)
+                    KG = source.get_KG(c)
 
                     # Calculate Zbase for debug
                     Zbase = (source.Un ** 2) / source.Sn
@@ -446,48 +446,100 @@ class ShortCircuitCalculator:
         """
         Get total impedance along path between buses.
 
-        This is a simplified BFS-based path finding that returns
-        the series impedance along the shortest path.
+        This implementation:
+        1. Finds all paths using BFS
+        2. For each segment, calculates parallel impedance of all elements
+        3. Sums segment impedances in series
         """
         if from_bus == to_bus:
             return ComplexImpedance(0, 0), ComplexImpedance(0, 0), ComplexImpedance(0, 0)
 
-        # BFS to find path
+        # First, find the shortest path (sequence of buses)
+        path_buses = self._find_bus_path(from_bus, to_bus)
+        if not path_buses:
+            return None
+
+        # For each segment, calculate parallel impedance of all connecting elements
+        Z1_total = ComplexImpedance(0, 0)
+        Z2_total = ComplexImpedance(0, 0)
+        Z0_total = ComplexImpedance(0, 0)
+
+        for i in range(len(path_buses) - 1):
+            bus_a = path_buses[i]
+            bus_b = path_buses[i + 1]
+
+            # Find all elements connecting bus_a and bus_b
+            Z1_segment, Z2_segment, Z0_segment = self._get_parallel_impedance_between(
+                bus_a, bus_b, ref_voltage
+            )
+
+            Z1_total = Z1_total + Z1_segment
+            Z2_total = Z2_total + Z2_segment
+            if Z0_segment.magnitude < 1e10:
+                Z0_total = Z0_total + Z0_segment
+            else:
+                Z0_total = Z0_segment
+
+        return Z1_total, Z2_total, Z0_total
+
+    def _find_bus_path(self, from_bus: str, to_bus: str) -> Optional[List[str]]:
+        """Find shortest path of buses using BFS."""
+        if from_bus == to_bus:
+            return [from_bus]
+
         visited = set()
-        queue = [(from_bus, [], [])]  # (current_bus, path, elements)
+        queue = [(from_bus, [from_bus])]
 
         while queue:
-            current, path, elements = queue.pop(0)
+            current, path = queue.pop(0)
 
             if current in visited:
                 continue
             visited.add(current)
 
             if current == to_bus:
-                # Found path - calculate total impedance
-                Z1_total = ComplexImpedance(0, 0)
-                Z2_total = ComplexImpedance(0, 0)
-                Z0_total = ComplexImpedance(0, 0)
+                return path
 
-                for elem in elements:
-                    Z1, Z2, Z0 = self._get_element_sequence_impedance(elem, ref_voltage)
-                    Z1_total = Z1_total + Z1
-                    Z2_total = Z2_total + Z2
-                    if Z0.magnitude < 1e10:
-                        Z0_total = Z0_total + Z0
-                    else:
-                        Z0_total = Z0
-
-                return Z1_total, Z2_total, Z0_total
-
-            # Explore neighbors
+            # Find neighboring buses
             for elem in self.network.get_elements_at_bus(current):
                 buses = self._get_element_buses(elem)
                 for next_bus in buses:
                     if next_bus != current and next_bus not in visited:
-                        queue.append((next_bus, path + [current], elements + [elem]))
+                        queue.append((next_bus, path + [next_bus]))
 
         return None
+
+    def _get_parallel_impedance_between(
+        self,
+        bus_a: str,
+        bus_b: str,
+        ref_voltage: float
+    ) -> Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]:
+        """Get parallel impedance of all elements connecting two buses."""
+        Z1_parallel = None
+        Z2_parallel = None
+        Z0_parallel = None
+
+        # Find all elements connecting bus_a and bus_b
+        for elem in self.network.get_elements_at_bus(bus_a):
+            buses = self._get_element_buses(elem)
+            if bus_b in buses:
+                Z1, Z2, Z0 = self._get_element_sequence_impedance(elem, ref_voltage)
+
+                if Z1_parallel is None:
+                    Z1_parallel = Z1
+                    Z2_parallel = Z2
+                    Z0_parallel = Z0
+                else:
+                    Z1_parallel = Z1_parallel.parallel(Z1)
+                    Z2_parallel = Z2_parallel.parallel(Z2)
+                    if Z0.magnitude < 1e10 and Z0_parallel.magnitude < 1e10:
+                        Z0_parallel = Z0_parallel.parallel(Z0)
+
+        if Z1_parallel is None:
+            return ComplexImpedance(0, 0), ComplexImpedance(0, 0), ComplexImpedance(0, 0)
+
+        return Z1_parallel, Z2_parallel, Z0_parallel
 
     def _get_element_buses(self, element) -> List[str]:
         """Get buses connected by element."""
