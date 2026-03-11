@@ -20,6 +20,7 @@ from app.models import (
     CalculationMode,
     CalculationStatus,
     FaultType,
+    Scenario,
 )
 
 
@@ -317,3 +318,71 @@ class TestRunResultModel:
         session.commit()
 
         assert session.get(RunResult, result_id) is None
+
+
+class TestScenarioModel:
+    """Tests for Scenario model element filtering and breaker state mapping."""
+
+    def test_breaker_states_disable_line(self, session):
+        user = User(email="scenario1@example.com", hashed_password="hash")
+        session.add(user)
+        session.commit()
+        project = Project(name="Scenario Test", owner_id=user.id)
+        session.add(project)
+        session.commit()
+
+        scenario = Scenario(
+            project_id=project.id,
+            name="S1",
+            element_states={"breakers": {"L1": False}},
+        )
+        session.add(scenario)
+        session.commit()
+
+        assert scenario.is_element_active("lines", "L1") is False
+        assert scenario.is_element_active("lines", "L2") is True
+
+    def test_breaker_states_require_all_transformer_sides_closed(self, session):
+        user = User(email="scenario2@example.com", hashed_password="hash")
+        session.add(user)
+        session.commit()
+        project = Project(name="Scenario Test", owner_id=user.id)
+        session.add(project)
+        session.commit()
+
+        scenario = Scenario(
+            project_id=project.id,
+            name="S2",
+            element_states={"breakers": {"T1_HV": True, "T1_LV": False}},
+        )
+        session.add(scenario)
+        session.commit()
+
+        assert scenario.is_element_active("transformers_2w", "T1") is False
+
+        scenario.element_states = {"breakers": {"T1_HV": True, "T1_LV": True}}
+        assert scenario.is_element_active("transformers_2w", "T1") is True
+
+    def test_get_active_elements_uses_breaker_states(self, session):
+        user = User(email="scenario3@example.com", hashed_password="hash")
+        session.add(user)
+        session.commit()
+        project = Project(name="Scenario Test", owner_id=user.id)
+        session.add(project)
+        session.commit()
+
+        scenario = Scenario(
+            project_id=project.id,
+            name="S3",
+            element_states={"breakers": {"L1": False, "T1_HV": True, "T1_LV": False}},
+        )
+
+        elements = {
+            "busbars": [{"id": "B1"}, {"id": "B2"}],
+            "lines": [{"id": "L1"}, {"id": "L2"}],
+            "transformers_2w": [{"id": "T1"}, {"id": "T2"}],
+        }
+        filtered = scenario.get_active_elements(elements)
+
+        assert [e["id"] for e in filtered["lines"]] == ["L2"]
+        assert [e["id"] for e in filtered["transformers_2w"]] == ["T2"]
