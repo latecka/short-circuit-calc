@@ -16,8 +16,43 @@ from reportlab.platypus import (
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-from app.models import CalculationRun, Project, NetworkVersion
+from app.models import CalculationRun, Project, NetworkVersion, Scenario
 from app.services.network_schema import generate_network_schema
+
+# Element type labels in Slovak
+ELEMENT_TYPE_LABELS = {
+    'busbars': 'Uzly',
+    'external_grids': 'Externé siete',
+    'lines': 'Vedenia',
+    'transformers_2w': 'Transformátory 2W',
+    'transformers_3w': 'Transformátory 3W',
+    'autotransformers': 'Autotransformátory',
+    'generators': 'Generátory',
+    'motors': 'Motory',
+    'psus': 'PSU',
+    'impedances': 'Impedancie',
+    'grounding_impedances': 'Zemniace impedancie',
+}
+
+
+def _get_excluded_elements(elements: dict, scenario: Scenario) -> dict:
+    """Get dictionary of excluded element IDs by type."""
+    excluded = {}
+    if not scenario or not scenario.element_states:
+        return excluded
+
+    for elem_type, elem_list in elements.items():
+        if not isinstance(elem_list, list):
+            continue
+        excluded_ids = []
+        for elem in elem_list:
+            elem_id = elem.get('id', '')
+            if not scenario.is_element_active(elem_type, elem_id):
+                excluded_ids.append(elem_id)
+        if excluded_ids:
+            excluded[elem_type] = excluded_ids
+
+    return excluded
 
 # Register DejaVu fonts for Unicode/diacritics support
 pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
@@ -28,6 +63,7 @@ def generate_calculation_report(
     run: CalculationRun,
     project: Project,
     version: NetworkVersion,
+    scenario: Scenario = None,
 ) -> BytesIO:
     """Generate professional PDF report for calculation results."""
 
@@ -222,7 +258,23 @@ def generate_calculation_report(
     <b>Počet uzlov:</b> {len(run.fault_buses)}<br/>
     <b>Engine verzia:</b> {run.engine_version}
     """
+    if scenario:
+        scope_text += f"""<br/><b>Scenár:</b> {scenario.name}"""
+        if scenario.description:
+            scope_text += f""" ({scenario.description})"""
     story.append(Paragraph(scope_text, normal_style))
+
+    # Show excluded elements if scenario has any
+    if scenario and scenario.element_states:
+        excluded_elements = _get_excluded_elements(elements_data, scenario)
+        if excluded_elements:
+            story.append(Paragraph("1.2 Vylúčené prvky zo scenára", heading2_style))
+            excluded_text = "<b>Nasledujúce prvky boli vylúčené z výpočtu:</b><br/>"
+            for elem_type, elem_ids in excluded_elements.items():
+                if elem_ids:
+                    type_label = ELEMENT_TYPE_LABELS.get(elem_type, elem_type)
+                    excluded_text += f"• {type_label}: {', '.join(elem_ids)}<br/>"
+            story.append(Paragraph(excluded_text, normal_style))
 
     story.append(Paragraph("1.2 Normatívny základ", heading2_style))
     norm_text = """

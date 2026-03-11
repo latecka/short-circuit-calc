@@ -7,13 +7,49 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 
-from app.models import CalculationRun, Project, NetworkVersion
+from app.models import CalculationRun, Project, NetworkVersion, Scenario
+
+# Element type labels in Slovak
+ELEMENT_TYPE_LABELS = {
+    'busbars': 'Uzly',
+    'external_grids': 'Externé siete',
+    'lines': 'Vedenia',
+    'transformers_2w': 'Transformátory 2W',
+    'transformers_3w': 'Transformátory 3W',
+    'autotransformers': 'Autotransformátory',
+    'generators': 'Generátory',
+    'motors': 'Motory',
+    'psus': 'PSU',
+    'impedances': 'Impedancie',
+    'grounding_impedances': 'Zemniace impedancie',
+}
+
+
+def _get_excluded_elements(elements: dict, scenario: Scenario) -> dict:
+    """Get dictionary of excluded element IDs by type."""
+    excluded = {}
+    if not scenario or not scenario.element_states:
+        return excluded
+
+    for elem_type, elem_list in elements.items():
+        if not isinstance(elem_list, list):
+            continue
+        excluded_ids = []
+        for elem in elem_list:
+            elem_id = elem.get('id', '')
+            if not scenario.is_element_active(elem_type, elem_id):
+                excluded_ids.append(elem_id)
+        if excluded_ids:
+            excluded[elem_type] = excluded_ids
+
+    return excluded
 
 
 def generate_calculation_report(
     run: CalculationRun,
     project: Project,
     version: NetworkVersion,
+    scenario: Scenario = None,
 ) -> BytesIO:
     """Generate XLSX report for calculation results."""
     wb = Workbook()
@@ -60,6 +96,12 @@ def generate_calculation_report(
         ("Dátum výpočtu:", run.completed_at.strftime("%d.%m.%Y %H:%M") if run.completed_at else "-"),
         ("Engine verzia:", run.engine_version),
     ]
+
+    # Add scenario info if present
+    if scenario:
+        info_data.append(("Scenár:", scenario.name))
+        if scenario.description:
+            info_data.append(("Popis scenára:", scenario.description))
 
     for i, (label, value) in enumerate(info_data):
         ws_summary[f'A{info_start + i}'] = label
@@ -241,6 +283,57 @@ def generate_calculation_report(
     # Adjust column widths
     for col in range(1, 10):
         ws_elements.column_dimensions[get_column_letter(col)].width = 15
+
+    # === Sheet 4: Excluded Elements (if scenario) ===
+    if scenario and scenario.element_states:
+        excluded = _get_excluded_elements(elements, scenario)
+        if excluded:
+            ws_excluded = wb.create_sheet("Vylúčené prvky")
+
+            # Title
+            ws_excluded['A1'] = f"Vylúčené prvky - Scenár: {scenario.name}"
+            ws_excluded['A1'].font = Font(bold=True, size=12)
+            ws_excluded.merge_cells('A1:C1')
+
+            if scenario.description:
+                ws_excluded['A2'] = scenario.description
+                ws_excluded['A2'].font = Font(italic=True, color="808080")
+                ws_excluded.merge_cells('A2:C2')
+
+            row = 4
+            for elem_type, elem_ids in excluded.items():
+                if not elem_ids:
+                    continue
+
+                type_label = ELEMENT_TYPE_LABELS.get(elem_type, elem_type)
+
+                # Section header
+                ws_excluded.cell(row=row, column=1, value=type_label)
+                ws_excluded.cell(row=row, column=1).font = Font(bold=True, size=11)
+                row += 1
+
+                # Column headers
+                for col, header in enumerate(['ID', 'Názov'], 1):
+                    cell = ws_excluded.cell(row=row, column=col, value=header)
+                    cell.font = subheader_font
+                    cell.fill = subheader_fill
+                    cell.border = thin_border
+                row += 1
+
+                # Find element details from elements dict
+                elem_list = elements.get(elem_type, [])
+                for elem_id in elem_ids:
+                    elem_data = next((e for e in elem_list if e.get('id') == elem_id), {})
+                    cell = ws_excluded.cell(row=row, column=1, value=elem_id)
+                    cell.border = thin_border
+                    cell = ws_excluded.cell(row=row, column=2, value=elem_data.get('name', '-'))
+                    cell.border = thin_border
+                    row += 1
+
+                row += 1  # Empty row
+
+            ws_excluded.column_dimensions['A'].width = 20
+            ws_excluded.column_dimensions['B'].width = 30
 
     # Save
     buffer = BytesIO()

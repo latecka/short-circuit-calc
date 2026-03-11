@@ -79,12 +79,26 @@ def list_scenarios(
     db: DBSession,
     current_user: CurrentUser,
 ):
-    """List all scenarios for a project."""
+    """List all scenarios for a project. Auto-creates default scenario if none exist."""
     project = _get_project_or_404(db, project_id, current_user.id)
 
     scenarios = db.query(Scenario).filter(
         Scenario.project_id == project_id,
     ).order_by(Scenario.created_at).all()
+
+    # Auto-create default scenario if none exist
+    if not scenarios:
+        default_scenario = Scenario(
+            project_id=project_id,
+            name="Základný scenár",
+            description="Všetky prvky aktívne",
+            calculation_mode=CalculationMode.MAX,
+            element_states={},
+        )
+        db.add(default_scenario)
+        db.commit()
+        db.refresh(default_scenario)
+        scenarios = [default_scenario]
 
     return ScenarioListResponse(
         items=[_scenario_to_response(s) for s in scenarios],

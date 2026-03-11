@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse, Response
 
 from app.api.deps import DBSession, CurrentUser
-from app.models import CalculationRun, Project, NetworkVersion, AuditAction
+from app.models import CalculationRun, Project, NetworkVersion, Scenario, AuditAction
 from app.services import export_pdf, export_xlsx
 from app.services.network_schema import generate_network_schema
 from app.services.audit import log_action
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/export", tags=["export"])
 
 
 def _get_calculation_data(db: DBSession, run_id: str, current_user: CurrentUser):
-    """Get calculation run with project and version data."""
+    """Get calculation run with project, version and scenario data."""
     run = db.query(CalculationRun).filter(
         CalculationRun.id == run_id,
         CalculationRun.user_id == current_user.id,
@@ -30,7 +30,12 @@ def _get_calculation_data(db: DBSession, run_id: str, current_user: CurrentUser)
     project = db.query(Project).filter(Project.id == run.project_id).first()
     version = db.query(NetworkVersion).filter(NetworkVersion.id == run.network_version_id).first()
 
-    return run, project, version
+    # Get scenario if linked
+    scenario = None
+    if run.scenario_id:
+        scenario = db.query(Scenario).filter(Scenario.id == run.scenario_id).first()
+
+    return run, project, version, scenario
 
 
 @router.get("/pdf/{run_id}")
@@ -40,10 +45,10 @@ def export_pdf_report(
     current_user: CurrentUser,
 ):
     """Export calculation results as PDF."""
-    run, project, version = _get_calculation_data(db, run_id, current_user)
+    run, project, version, scenario = _get_calculation_data(db, run_id, current_user)
 
     # Generate PDF
-    pdf_buffer = export_pdf.generate_calculation_report(run, project, version)
+    pdf_buffer = export_pdf.generate_calculation_report(run, project, version, scenario)
 
     # Log export
     log_action(
@@ -74,10 +79,10 @@ def export_xlsx_report(
     current_user: CurrentUser,
 ):
     """Export calculation results as XLSX."""
-    run, project, version = _get_calculation_data(db, run_id, current_user)
+    run, project, version, scenario = _get_calculation_data(db, run_id, current_user)
 
     # Generate XLSX
-    xlsx_buffer = export_xlsx.generate_calculation_report(run, project, version)
+    xlsx_buffer = export_xlsx.generate_calculation_report(run, project, version, scenario)
 
     # Log export
     log_action(
@@ -109,7 +114,7 @@ def export_network_schema(
     format: str = Query("svg", pattern="^(svg|png)$"),
 ):
     """Export network schema as SVG or PNG diagram."""
-    run, project, version = _get_calculation_data(db, run_id, current_user)
+    run, project, version, scenario = _get_calculation_data(db, run_id, current_user)
 
     # Get network elements
     elements = version.elements or {}
