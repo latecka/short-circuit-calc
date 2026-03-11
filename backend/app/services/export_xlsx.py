@@ -197,10 +197,14 @@ def generate_calculation_report(
     element_types = [
         ("busbars", "Uzly", ["id", "name", "Un", "is_reference"]),
         ("external_grids", "Externé siete", ["id", "name", "bus_id", "Sk_max", "Sk_min", "rx_ratio"]),
-        ("lines", "Vedenia", ["id", "name", "bus_from", "bus_to", "length", "r1_per_km", "x1_per_km"]),
-        ("transformers_2w", "Transformátory 2W", ["id", "name", "bus_hv", "bus_lv", "Sn", "uk_percent", "vector_group"]),
-        ("generators", "Generátory", ["id", "name", "bus_id", "Sn", "Un", "Xd_pp", "cos_phi"]),
+        ("lines", "Vedenia", ["id", "name", "bus_from", "bus_to", "length", "r1_per_km", "x1_per_km", "r0_per_km", "x0_per_km"]),
+        ("transformers_2w", "Transformátory 2W", ["id", "name", "bus_hv", "bus_lv", "Sn", "Un_hv", "Un_lv", "uk_percent", "Pkr", "vector_group"]),
+        ("transformers_3w", "Transformátory 3W", ["id", "name", "bus_hv", "bus_mv", "bus_lv", "Sn_hv", "Un_hv", "Un_mv", "Un_lv", "uk_hv_mv_percent", "uk_hv_lv_percent", "uk_mv_lv_percent", "Pkr_hv_mv", "Pkr_hv_lv", "Pkr_mv_lv"]),
+        ("autotransformers", "Autotransformátory", ["id", "name", "bus_hv", "bus_lv", "Sn", "Un_hv", "Un_lv", "uk_percent", "Pkr"]),
+        ("generators", "Generátory", ["id", "name", "bus_id", "Sn", "Un", "Xd_pp", "Ra", "cos_phi"]),
         ("motors", "Motory", ["id", "name", "bus_id", "Un", "Pn", "Ia_In"]),
+        ("psus", "PSU", ["id", "name", "generator_id", "transformer_id", "has_oltc"]),
+        ("impedances", "Impedancie", ["id", "name", "bus_from", "bus_to", "R", "X", "R0", "X0"]),
     ]
 
     for key, title, cols in element_types:

@@ -58,7 +58,7 @@ class PowerStationUnit(NetworkElement):
         self._generator = generator
         self._transformer = transformer
 
-    def get_KS(self, c: float = 1.1) -> float:
+    def get_KS(self, c: float = 1.1, Un_Q: Optional[float] = None) -> float:
         """
         Calculate correction factor KS for PSU with OLTC.
 
@@ -66,13 +66,15 @@ class PowerStationUnit(NetworkElement):
         KS = (Un_Q * c_max) / (UrG * (1 + xd'' * sin(phi)))
 
         where:
-        - Un_Q is the nominal voltage at the HV side of the transformer
+        - Un_Q is the nominal NETWORK voltage at the connection point
         - UrG is the rated voltage of the generator
         - xd'' is the subtransient reactance (p.u.)
         - phi is the power factor angle
 
         Args:
             c: Voltage factor (default 1.1 for max)
+            Un_Q: Network nominal voltage at connection point [kV].
+                  If not provided, falls back to transformer Un_hv.
 
         Returns:
             Correction factor KS
@@ -83,23 +85,28 @@ class PowerStationUnit(NetworkElement):
         gen = self._generator
         tr = self._transformer
 
-        # Get HV side nominal voltage
-        if isinstance(tr, Transformer3W):
-            Un_Q = tr.Un_hv
-        else:
-            Un_Q = tr.Un_hv
+        # Get network voltage at connection point (HV side of block transformer)
+        # Un_Q should be the NETWORK voltage, not transformer rated voltage
+        if Un_Q is None:
+            # Fallback to transformer rated voltage if network voltage not provided
+            if isinstance(tr, Transformer3W):
+                Un_Q = tr.Un_hv
+            else:
+                Un_Q = tr.Un_hv
 
         # Generator parameters
         UrG = gen.Un
         xd_pp = gen.Xd_pp / 100  # Convert from % to p.u.
         sin_phi = math.sqrt(1 - gen.cos_phi ** 2)
 
-        # KS calculation
+        # KS calculation (IEC 60909-0 eq. 22)
         KS = (Un_Q * c) / (UrG * (1 + xd_pp * sin_phi))
 
         return KS
 
-    def get_KSO(self, c: float = 1.1, p_t: float = 0.0) -> float:
+    def get_KSO(
+        self, c: float = 1.1, p_t: float = 0.0, Un_Q: Optional[float] = None
+    ) -> float:
         """
         Calculate correction factor KSO for PSU without OLTC.
 
@@ -107,12 +114,15 @@ class PowerStationUnit(NetworkElement):
         KSO = (Un_Q * (1 + p_t) * c_max) / (UrTLV * (1 + xd'' * sin(phi)))
 
         where:
+        - Un_Q is the nominal NETWORK voltage at connection point
         - p_t is the relative tap position
         - UrTLV is the rated voltage of the LV side of transformer
 
         Args:
             c: Voltage factor (default 1.1 for max)
             p_t: Relative tap position (default 0)
+            Un_Q: Network nominal voltage at connection point [kV].
+                  If not provided, falls back to transformer Un_hv.
 
         Returns:
             Correction factor KSO
@@ -123,16 +133,21 @@ class PowerStationUnit(NetworkElement):
         gen = self._generator
         tr = self._transformer
 
-        # Get voltages
+        # Get network voltage at connection point
+        if Un_Q is None:
+            # Fallback to transformer rated voltage
+            if isinstance(tr, Transformer3W):
+                Un_Q = tr.Un_hv
+            else:
+                Un_Q = tr.Un_hv
+
+        # Get transformer LV side rated voltage
         if isinstance(tr, Transformer3W):
-            Un_Q = tr.Un_hv
-            # For 3W, get the winding where generator is connected
             if self.generator_winding == "mv":
                 UrTLV = tr.Un_mv
             else:  # "lv" or default
                 UrTLV = tr.Un_lv
         else:
-            Un_Q = tr.Un_hv
             UrTLV = tr.Un_lv
 
         # Actual tap position
@@ -142,25 +157,28 @@ class PowerStationUnit(NetworkElement):
         xd_pp = gen.Xd_pp / 100
         sin_phi = math.sqrt(1 - gen.cos_phi ** 2)
 
-        # KSO calculation
+        # KSO calculation (IEC 60909-0 eq. 24)
         KSO = (Un_Q * (1 + p_t_actual) * c) / (UrTLV * (1 + xd_pp * sin_phi))
 
         return KSO
 
-    def get_correction_factor(self, c: float = 1.1) -> tuple[str, float]:
+    def get_correction_factor(
+        self, c: float = 1.1, Un_Q: Optional[float] = None
+    ) -> tuple[str, float]:
         """
         Get appropriate correction factor based on OLTC presence.
 
         Args:
             c: Voltage factor
+            Un_Q: Network nominal voltage at connection point [kV]
 
         Returns:
             Tuple of (factor_name, factor_value)
         """
         if self.has_oltc:
-            return ("KS", self.get_KS(c))
+            return ("KS", self.get_KS(c, Un_Q))
         else:
-            return ("KSO", self.get_KSO(c))
+            return ("KSO", self.get_KSO(c, Un_Q=Un_Q))
 
     def get_combined_impedance(
         self, ref_voltage: float, c: float = 1.1
@@ -170,6 +188,14 @@ class PowerStationUnit(NetworkElement):
 
         The combined impedance includes both generator and transformer
         impedances with the appropriate KS or KSO factor applied.
+
+        IEC 60909-0 §3.7: The correction factor K (KS or KSO) modifies
+        the PSU impedance as Z_corrected = Z / K, which is equivalent
+        to applying K to the equivalent voltage source (E_k = K * c * Un).
+
+        When computing the Thevenin impedance seen by the network,
+        we scale the PSU impedance by 1/K so that the resulting
+        short-circuit current is I = K * c * Un / Z = c * Un / (Z/K).
 
         Args:
             ref_voltage: Reference voltage [kV]
@@ -199,15 +225,22 @@ class PowerStationUnit(NetworkElement):
         Z2_total = Z2_gen + Z2_tr
         Z0_total = Z0_tr  # Generator typically doesn't contribute to Z0
 
-        # Apply correction factor
-        _, K = self.get_correction_factor(c)
+        # Apply correction factor K to impedance
+        # Z_corrected = Z / K to model the increased EMF of the PSU
+        # Use ref_voltage as Un_Q (network voltage at connection point)
+        _, K = self.get_correction_factor(c, Un_Q=ref_voltage)
 
-        # The correction factor modifies the impedance
-        # Z_corrected = Z / K² for voltage-based correction
-        # Or simply scale the current contribution
-        # For IEC 60909-0, we apply K to the equivalent voltage source
+        if K > 0 and K != 1.0:
+            # Scale impedance by 1/K to reflect correction factor
+            Z1_corrected = ComplexImpedance(Z1_total.r / K, Z1_total.x / K)
+            Z2_corrected = ComplexImpedance(Z2_total.r / K, Z2_total.x / K)
+            Z0_corrected = Z0_total  # Z0 is not affected by PSU correction
+        else:
+            Z1_corrected = Z1_total
+            Z2_corrected = Z2_total
+            Z0_corrected = Z0_total
 
-        return Z1_total, Z2_total, Z0_total
+        return Z1_corrected, Z2_corrected, Z0_corrected
 
     def validate(self, network: Optional[Network] = None) -> list[str]:
         """

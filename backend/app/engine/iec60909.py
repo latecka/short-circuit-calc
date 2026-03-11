@@ -254,17 +254,16 @@ class ShortCircuitCalculator:
 
         # Calculate peak current
         R_X = Zk.r / Zk.x if abs(Zk.x) > 1e-10 else 0
-        ip = self._calculate_ip(Ik, R_X)
 
         # Collect correction factors used
         correction_factors = self._get_correction_factors(is_max)
 
-        # Build result
+        # Build result (will add ip and warnings after)
         result = FaultResult(
             bus_id=bus_id,
             fault_type=fault_type,
             Ik=Ik,
-            ip=ip,
+            ip=0.0,  # Will be set below
             Zk=Zk,
             Z1=Z1,
             Z2=Z2,
@@ -273,6 +272,10 @@ class ShortCircuitCalculator:
             c_factor=c,
             correction_factors=correction_factors,
         )
+
+        # Calculate peak current with topology warning
+        ip = self._calculate_ip(Ik, R_X, bus_id, result.warnings)
+        result.ip = ip
 
         # Add warnings
         if fault_type == "Ik1" and Z0.magnitude > 1e10:
@@ -574,7 +577,13 @@ class ShortCircuitCalculator:
 
         return Ik, Zk
 
-    def _calculate_ip(self, Ik: float, R_X: float) -> float:
+    def _calculate_ip(
+        self,
+        Ik: float,
+        R_X: float,
+        bus_id: str = "",
+        warnings: list = None
+    ) -> float:
         """
         Calculate peak short-circuit current.
 
@@ -582,9 +591,16 @@ class ShortCircuitCalculator:
 
         where kappa depends on R/X ratio (IEC 60909-0 eq. 54)
 
+        For radial networks, uses the standard formula.
+        For meshed networks, IEC 60909-0 recommends Method B or C which
+        require per-branch R/X analysis. This implementation uses the
+        standard radial formula with warning for meshed networks.
+
         Args:
             Ik: Initial short-circuit current [kA]
             R_X: R/X ratio at fault location
+            bus_id: Bus ID for topology detection
+            warnings: List to append warnings to
 
         Returns:
             Peak current [kA]
@@ -595,9 +611,71 @@ class ShortCircuitCalculator:
             # IEC 60909-0 equation 54
             kappa = 1.02 + 0.98 * math.exp(-3 * R_X)
 
+        # Check if network is meshed and add warning
+        if bus_id and warnings is not None:
+            is_meshed = self._is_meshed_topology()
+            if is_meshed:
+                warnings.append(
+                    "Meshed network detected: kappa calculated using radial "
+                    "Method A (IEC 60909-0 §4.3.1.1). For higher accuracy, "
+                    "Method B or C may be required for meshed networks."
+                )
+
         ip = kappa * math.sqrt(2) * Ik
 
         return ip
+
+    def _is_meshed_topology(self) -> bool:
+        """
+        Detect if network has meshed (non-radial) topology.
+
+        A network is meshed if there are multiple paths between any
+        two buses, or if it has cycles (loops).
+
+        Simple heuristic: count if there are more branch elements
+        than (buses - 1), which would indicate cycles.
+
+        Returns:
+            True if network appears to be meshed
+        """
+        # Count buses and branches
+        buses = list(self.network.get_elements_by_type(Busbar))
+        n_buses = len(buses)
+
+        if n_buses <= 1:
+            return False
+
+        # Count branch elements (lines, transformers, etc.)
+        n_branches = 0
+
+        for line in self.network.get_elements_by_type(Line):
+            if line.in_service:
+                n_branches += 1
+
+        for tr in self.network.get_elements_by_type(Transformer2W):
+            if tr.in_service:
+                n_branches += 1
+
+        for tr in self.network.get_elements_by_type(Transformer3W):
+            if tr.in_service:
+                n_branches += 2  # 3W transformer contributes 2 branches
+
+        # Count sources (external grids, generators) - more than 1 suggests mesh
+        n_sources = 0
+        for grid in self.network.get_elements_by_type(ExternalGrid):
+            if grid.in_service:
+                n_sources += 1
+        for gen in self.network.get_elements_by_type(SynchronousGenerator):
+            if gen.in_service:
+                n_sources += 1
+
+        # Heuristics:
+        # 1. If branches > buses - 1, there are cycles
+        # 2. If there are multiple active sources feeding different buses
+        has_cycles = n_branches > (n_buses - 1)
+        has_multiple_sources = n_sources > 1
+
+        return has_cycles or has_multiple_sources
 
     def _get_correction_factors(self, is_max: bool) -> Dict[str, float]:
         """Collect all correction factors used."""

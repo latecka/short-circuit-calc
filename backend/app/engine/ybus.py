@@ -91,13 +91,32 @@ class YBusBuilder:
     # ------------------------------------------------------------------
 
     def _init_buses(self) -> None:
-        """Build bus index map and per-unit bases."""
+        """Build bus index map and per-unit bases.
+
+        Excludes PSU generator-side buses since these are modelled as part
+        of the PSU shunt at the network-side bus.
+        """
+        # Identify generator-side buses in PSUs (these are internal to PSU model)
+        psu_gen_buses = self._get_psu_generator_buses()
+
         for bus in self.network.get_elements_by_type(Busbar):
+            if bus.id in psu_gen_buses:
+                # Skip generator-side buses - they're part of PSU model
+                continue
+
             idx = len(self._bus_ids)
             self._bus_ids.append(bus.id)
             self._bus_index[bus.id] = idx
             self._bus_un[bus.id] = bus.Un
             self._bus_zbase[bus.id] = (bus.Un ** 2) / S_BASE if bus.Un > 0 else 1.0
+
+    def _get_psu_generator_buses(self) -> set:
+        """Get set of bus IDs that are generator-side buses in PSUs."""
+        psu_gen_buses = set()
+        for psu in self.network.get_psus():
+            if psu._generator is not None:
+                psu_gen_buses.add(psu._generator.bus_id)
+        return psu_gen_buses
 
     def _add_internal_bus(self, tag: str, Un: float) -> str:
         """Create an internal bus (e.g. for 3W transformer star point)."""
@@ -152,7 +171,11 @@ class YBusBuilder:
 
         # Extract Thévenin impedances (diagonal elements) in actual Ohms
         result = {}
+        # Only iterate over busbars that are in the Y-bus matrix
+        # (excludes PSU generator-side buses and internal star-point buses)
         for bus_id in self.network.busbars:
+            if bus_id not in self._bus_index:
+                continue  # Skip buses not in Y-bus (e.g., PSU generator buses)
             i = self._bus_index[bus_id]
             zbase = self._bus_zbase[bus_id]
 
