@@ -13,9 +13,12 @@ The calculation follows the equivalent voltage source method per IEC 60909-0.
 from __future__ import annotations
 
 import cmath
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from .elements import (
     AsynchronousMotor,
@@ -303,6 +306,9 @@ class ShortCircuitCalculator:
         """
         bus = self.network.get_bus(bus_id)
         Un = bus.Un if bus else 1.0
+        mode = "MAX" if is_max else "MIN"
+
+        logger.debug(f"=== Thevenin impedance at {bus_id} (Un={Un} kV, mode={mode}) ===")
 
         Z1_total = ComplexImpedance(0, 0)
         Z2_total = ComplexImpedance(0, 0)
@@ -313,15 +319,26 @@ class ShortCircuitCalculator:
         # Collect impedances from all sources
         for source in self.network.get_sources():
             if isinstance(source, ExternalGrid):
-                Z1, Z2, Z0 = source.get_impedance(Un, is_max)
+                c = get_c_factor(Un, is_max)
+                Z1_grid, Z2, Z0 = source.get_impedance(Un, is_max)
+
+                logger.debug(
+                    f"  ExternalGrid {source.id}: Sk={'max' if is_max else 'min'}={source.Sk_max if is_max else source.Sk_min} MVA, "
+                    f"c={c}, Z1={Z1_grid.r:.6f}+j{Z1_grid.x:.6f} Ω (at {Un} kV base)"
+                )
+
+                Z1 = Z1_grid
 
                 # Add transformer impedance if source is not at fault bus
                 if source.bus_id != bus_id:
                     Z_path = self._get_path_impedance(source.bus_id, bus_id, Un)
                     if Z_path:
+                        logger.debug(f"    Path {source.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
                         Z1 = Z1 + Z_path[0]
                         Z2 = Z2 + Z_path[1]
                         Z0 = Z0 + Z_path[2]
+
+                logger.debug(f"    → Total Z1 from {source.id}: {Z1.r:.6f}+j{Z1.x:.6f} Ω")
 
                 # Parallel combination
                 if has_source:
@@ -342,19 +359,46 @@ class ShortCircuitCalculator:
                     # Use PSU combined impedance
                     c = get_c_factor(Un, is_max)
                     Z1, Z2, Z0 = psu.get_combined_impedance(Un, c)
+                    logger.debug(f"  Generator {source.id} (PSU): Z1={Z1.r:.6f}+j{Z1.x:.6f} Ω (at {Un} kV base)")
                 else:
-                    # Direct connection - apply KG
-                    Z1, Z2, Z0 = source.get_impedance(Un)
-                    KG = source.get_KG(Un)
-                    Z1 = Z1 * (1 / KG)  # Adjust for correction factor
+                    # Direct connection - apply KG per IEC 60909-0 eq. 17
+                    # ZG = KG * (RG + j*Xd'')
+                    c = get_c_factor(Un, is_max)
+                    Z1_base, Z2_base, Z0 = source.get_impedance(Un)
+                    KG = source.get_KG(Un, c)
+
+                    # Calculate Zbase for debug
+                    Zbase = (source.Un ** 2) / source.Sn
+                    sin_phi = math.sqrt(1 - source.cos_phi ** 2)
+
+                    logger.debug(
+                        f"  Generator {source.id}: Sn={source.Sn} MVA, Un={source.Un} kV, "
+                        f"Xd''={source.Xd_pp}%, cos_phi={source.cos_phi}"
+                    )
+                    logger.debug(
+                        f"    Zbase={Zbase:.4f} Ω, sin_phi={sin_phi:.4f}, KG={KG:.4f}"
+                    )
+                    logger.debug(
+                        f"    Z1_base (at {Un} kV)={Z1_base.r:.6f}+j{Z1_base.x:.6f} Ω"
+                    )
+
+                    Z1 = Z1_base * KG  # IEC 60909-0 eq. 17: ZG = KG * ZG_base
+                    Z2 = Z2_base * KG  # Z2 also gets correction
+
+                    logger.debug(
+                        f"    Z1_korr = KG * Z1_base = {Z1.r:.6f}+j{Z1.x:.6f} Ω"
+                    )
 
                 # Add path impedance
                 if source.bus_id != bus_id:
                     Z_path = self._get_path_impedance(source.bus_id, bus_id, Un)
                     if Z_path:
+                        logger.debug(f"    Path {source.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
                         Z1 = Z1 + Z_path[0]
                         Z2 = Z2 + Z_path[1]
                         # Z0 from generator is infinite, use path Z0
+
+                logger.debug(f"    → Total Z1 from {source.id}: {Z1.r:.6f}+j{Z1.x:.6f} Ω")
 
                 # Parallel combination
                 if has_source:
@@ -372,16 +416,24 @@ class ShortCircuitCalculator:
                 if motor.include_in_sc and motor.in_service:
                     Z1_m, Z2_m, _ = motor.get_impedance(Un)
 
+                    logger.debug(
+                        f"  Motor {motor.id}: Z1={Z1_m.r:.6f}+j{Z1_m.x:.6f} Ω (at {Un} kV base)"
+                    )
+
                     # Add path impedance
                     if motor.bus_id != bus_id:
                         Z_path = self._get_path_impedance(motor.bus_id, bus_id, Un)
                         if Z_path:
+                            logger.debug(f"    Path {motor.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
                             Z1_m = Z1_m + Z_path[0]
                             Z2_m = Z2_m + Z_path[1]
 
                     if Z1_m.magnitude < 1e10:
                         Z1_total = Z1_total.parallel(Z1_m)
                         Z2_total = Z2_total.parallel(Z2_m)
+                        logger.debug(f"    → Motor contributes, Z1_total now: {Z1_total.r:.6f}+j{Z1_total.x:.6f} Ω")
+
+        logger.debug(f"  === RESULT: Z1_total={Z1_total.r:.6f}+j{Z1_total.x:.6f} Ω ===")
 
         return Z1_total, Z2_total, Z0_total
 

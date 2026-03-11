@@ -473,14 +473,16 @@ class SynchronousGenerator(NetworkElement):
 
         return Z1, Z2, Z0
 
-    def get_KG(self, Un_network: float) -> float:
+    def get_KG(self, Un_network: float, c: float = 1.1) -> float:
         """
         Calculate correction factor KG for direct connection.
 
-        IEC 60909-0 §3.6.1, equations 17-18
+        IEC 60909-0 §3.6.1, equation 18:
+        KG = c * Un / (UrG * (1 + xd'' * sin(phi_rG)))
 
         Args:
             Un_network: Network nominal voltage at connection point [kV]
+            c: Voltage factor (c_max=1.1 for max, c_min=1.0 for min)
 
         Returns:
             Correction factor KG
@@ -488,8 +490,8 @@ class SynchronousGenerator(NetworkElement):
         sin_phi = math.sqrt(1 - self.cos_phi ** 2)
         xd_pp_pu = self.Xd_pp / 100
 
-        # KG = Un / (UrG * (1 + xd'' * sin(phi)))
-        KG = Un_network / (self.Un * (1 + xd_pp_pu * sin_phi))
+        # IEC 60909-0 eq. 18: KG = c * Un / (UrG * (1 + xd'' * sin(phi_rG)))
+        KG = c * Un_network / (self.Un * (1 + xd_pp_pu * sin_phi))
 
         return KG
 
