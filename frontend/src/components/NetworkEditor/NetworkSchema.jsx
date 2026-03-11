@@ -4,6 +4,7 @@ import BreakerEdge from './BreakerEdge';
 import { Button } from '../ui';
 
 const edgeTypes = { breaker: BreakerEdge };
+const EMPTY_BREAKERS = {};
 
 function flattenBreakers(elements) {
   const breakers = {};
@@ -43,7 +44,7 @@ function isEquipmentActive(keys, breakerStates) {
 export default function NetworkSchema({
   elements,
   mode = 'edit',
-  breakerStates = {},
+  breakerStates,
   onToggleBreaker,
   onSave,
 }) {
@@ -53,7 +54,8 @@ export default function NetworkSchema({
   const graph = useMemo(() => {
     const busbars = elements.busbars || [];
     const breakersBase = flattenBreakers(elements);
-    const mergedBreakers = { ...breakersBase, ...breakerStates };
+    const safeBreakerStates = breakerStates || EMPTY_BREAKERS;
+    const mergedBreakers = { ...breakersBase, ...safeBreakerStates };
 
     const busesByVoltage = new Map();
     busbars.forEach((b) => {
