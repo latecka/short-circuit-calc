@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Modal, Input, Select } from '../ui';
+import { Button, Modal } from '../ui';
 import ElementTable from './ElementTable';
 import ElementForm from './ElementForm';
 
