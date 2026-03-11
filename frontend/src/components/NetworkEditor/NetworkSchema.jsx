@@ -232,7 +232,7 @@ export default function NetworkSchema({
             nodesConnectable={false}
             elementsSelectable
             onNodeClick={handleNodeClick}
-            onNodeDragStop={(_, __, currentNodes) => persistLayout(currentNodes)}
+            onNodeDragStop={() => persistLayout(nodes)}
             proOptions={{ hideAttribution: true }}
           >
             <MiniMap zoomable pannable />
