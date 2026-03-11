@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import NetworkEditor from '../components/NetworkEditor/NetworkEditor';
 import ImportModal from '../components/NetworkEditor/ImportModal';
 import CalculationResults from '../components/Results/CalculationResults';
+import ScenarioManager from '../components/Scenarios/ScenarioManager';
 import { Button, Card, CardHeader, CardBody, Modal, Input, Select } from '../components/ui';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -42,6 +43,7 @@ export default function ProjectDetail() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
+  const [activeTab, setActiveTab] = useState('elements'); // 'elements' | 'scenarios'
   const [metadata, setMetadata] = useState({
     client_name: '',
     client_address: '',
@@ -499,14 +501,50 @@ export default function ProjectDetail() {
         )}
       </Card>
 
-      {/* Editor */}
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('elements')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'elements'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Sieťové prvky
+          </button>
+          <button
+            onClick={() => setActiveTab('scenarios')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'scenarios'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Scenáre
+          </button>
+        </nav>
+      </div>
+
+      {/* Main Content */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="xl:col-span-1">
           <CardHeader>
-            <h2 className="text-lg font-semibold">Editor siete</h2>
+            <h2 className="text-lg font-semibold">
+              {activeTab === 'elements' ? 'Editor siete' : 'Správa scenárov'}
+            </h2>
           </CardHeader>
-          <CardBody className="p-0">
-            <NetworkEditor elements={elements} onChange={handleElementsChange} />
+          <CardBody className={activeTab === 'elements' ? 'p-0' : ''}>
+            {activeTab === 'elements' ? (
+              <NetworkEditor elements={elements} onChange={handleElementsChange} />
+            ) : (
+              <ScenarioManager
+                projectId={projectId}
+                elements={elements}
+                onCalculationComplete={(result) => setCalcResult(result)}
+              />
+            )}
           </CardBody>
         </Card>
 

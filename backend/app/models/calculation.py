@@ -12,6 +12,7 @@ from .base import Base, generate_uuid
 if TYPE_CHECKING:
     from .user import User
     from .project import Project, NetworkVersion
+    from .scenario import Scenario
 
 
 class CalculationMode(str, Enum):
@@ -52,6 +53,10 @@ class CalculationRun(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), index=True
     )
+    scenario_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("scenarios.id", ondelete="SET NULL"),
+        nullable=True, index=True
+    )
 
     # Calculation parameters
     calculation_mode: Mapped[CalculationMode] = mapped_column(
@@ -89,6 +94,9 @@ class CalculationRun(Base):
     )
     user: Mapped["User"] = relationship(
         "User", back_populates="calculation_runs"
+    )
+    scenario: Mapped[Optional["Scenario"]] = relationship(
+        "Scenario", back_populates="calculation_runs"
     )
     results: Mapped[list["RunResult"]] = relationship(
         "RunResult", back_populates="run", cascade="all, delete-orphan"

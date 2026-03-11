@@ -11,6 +11,7 @@ from .base import Base, generate_uuid
 if TYPE_CHECKING:
     from .user import User
     from .calculation import CalculationRun
+    from .scenario import Scenario
 
 
 class Project(Base):
@@ -53,6 +54,10 @@ class Project(Base):
     )
     calculation_runs: Mapped[list["CalculationRun"]] = relationship(
         "CalculationRun", back_populates="project", cascade="all, delete-orphan"
+    )
+    scenarios: Mapped[list["Scenario"]] = relationship(
+        "Scenario", back_populates="project", cascade="all, delete-orphan",
+        order_by="Scenario.created_at"
     )
 
     @property

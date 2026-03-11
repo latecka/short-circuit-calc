@@ -97,6 +97,36 @@ export const projectsApi = {
   },
 };
 
+// Scenarios API
+export const scenariosApi = {
+  list: async (projectId) => {
+    const response = await client.get(`/projects/${projectId}/scenarios`);
+    return response.data;
+  },
+  get: async (projectId, scenarioId) => {
+    const response = await client.get(`/projects/${projectId}/scenarios/${scenarioId}`);
+    return response.data;
+  },
+  create: async (projectId, data) => {
+    const response = await client.post(`/projects/${projectId}/scenarios`, data);
+    return response.data;
+  },
+  update: async (projectId, scenarioId, data) => {
+    const response = await client.put(`/projects/${projectId}/scenarios/${scenarioId}`, data);
+    return response.data;
+  },
+  delete: async (projectId, scenarioId) => {
+    await client.delete(`/projects/${projectId}/scenarios/${scenarioId}`);
+  },
+  run: async (projectId, scenarioId, faultTypes, faultBuses) => {
+    const response = await client.post(`/projects/${projectId}/scenarios/${scenarioId}/run`, {
+      fault_types: faultTypes,
+      fault_buses: faultBuses,
+    });
+    return response.data;
+  },
+};
+
 // Calculations API
 export const calculationsApi = {
   run: async (networkVersionId, mode, faultTypes, faultBuses) => {

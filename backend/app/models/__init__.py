@@ -10,6 +10,7 @@ from .calculation import (
     CalculationStatus,
     FaultType,
 )
+from .scenario import Scenario
 from .audit import AuditLog, AuditAction
 
 __all__ = [
@@ -27,6 +28,8 @@ __all__ = [
     "CalculationMode",
     "CalculationStatus",
     "FaultType",
+    # Scenario
+    "Scenario",
     # Audit
     "AuditLog",
     "AuditAction",
