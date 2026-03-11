@@ -1,12 +1,187 @@
 """Network import service - JSON and XLSX."""
 
 import json
+import math
 from io import BytesIO
 from typing import Any
 
 from openpyxl import load_workbook
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic import ConfigDict
+
+
+# ============================================================================
+# Field name mappings for alternative import formats
+# ============================================================================
+
+# Element type name mappings
+ELEMENT_TYPE_ALIASES = {
+    'buses': 'busbars',
+    'transformers': 'transformers_2w',
+    'trafo_2w': 'transformers_2w',
+    'trafo_3w': 'transformers_3w',
+}
+
+# Field name mappings per element type
+FIELD_ALIASES = {
+    'busbars': {
+        'un_kv': 'Un',
+        'voltage': 'Un',
+        'voltage_kv': 'Un',
+    },
+    'external_grids': {
+        'sk_max_mva': 'Sk_max',
+        'sk_min_mva': 'Sk_min',
+        'sk3max_mva': 'Sk_max',
+        'sk3min_mva': 'Sk_min',
+        'skmax': 'Sk_max',
+        'skmin': 'Sk_min',
+        'rx_ratio_max': 'rx_ratio',
+    },
+    'transformers_2w': {
+        'hv_bus_id': 'bus_hv',
+        'lv_bus_id': 'bus_lv',
+        'bus1': 'bus_hv',
+        'bus2': 'bus_lv',
+        'sn_mva': 'Sn',
+        'rated_power': 'Sn',
+        'un1_kv': 'Un_hv',
+        'un2_kv': 'Un_lv',
+        'un_hv_kv': 'Un_hv',
+        'un_lv_kv': 'Un_lv',
+        'pkr_kw': 'Pkr',
+        'pk_kw': 'Pkr',
+        'losses_kw': 'Pkr',
+        'uk': 'uk_percent',
+    },
+    'generators': {
+        'sn_mva': 'Sn',
+        'rated_power': 'Sn',
+        'un_kv': 'Un',
+        'rated_voltage': 'Un',
+        'xdpp_pu': 'Xd_pp',  # Will be converted from p.u. to %
+        'xd_pp_pu': 'Xd_pp',
+        'xdpp': 'Xd_pp',
+        'ra_pu': 'Ra',  # Will be converted from p.u. to %
+        'ra_ohm': 'Ra_ohm',  # Needs special conversion
+    },
+    'lines': {
+        'from_bus': 'bus_from',
+        'to_bus': 'bus_to',
+        'from_bus_id': 'bus_from',
+        'to_bus_id': 'bus_to',
+        'length_km': 'length',
+        'r1_ohm_per_km': 'r1_per_km',
+        'x1_ohm_per_km': 'x1_per_km',
+        'r0_ohm_per_km': 'r0_per_km',
+        'x0_ohm_per_km': 'x0_per_km',
+        'parallel_cables': 'parallel_lines',
+    },
+    'motors': {
+        'un_kv': 'Un',
+        'sn_kva': 'Sn_kVA',  # Will be converted to MVA
+        'ilr_ratio': 'Ia_In',
+        'i_lr_ratio': 'Ia_In',
+        'ia_in': 'Ia_In',
+    },
+}
+
+
+def normalize_elements(raw: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize element type names and field names to expected format.
+
+    Handles alternative naming conventions from different import sources.
+    """
+    normalized = {}
+
+    for key, items in raw.items():
+        # Skip non-element keys
+        if not isinstance(items, list):
+            continue
+
+        # Map element type name
+        elem_type = ELEMENT_TYPE_ALIASES.get(key, key)
+
+        if elem_type not in normalized:
+            normalized[elem_type] = []
+
+        field_map = FIELD_ALIASES.get(elem_type, {})
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            norm_item = {}
+            for field, value in item.items():
+                # Map field name
+                mapped_field = field_map.get(field, field)
+                norm_item[mapped_field] = value
+
+            # Special conversions for generators
+            if elem_type == 'generators':
+                norm_item = _normalize_generator(norm_item)
+
+            # Special conversions for transformers
+            if elem_type == 'transformers_2w':
+                norm_item = _normalize_transformer_2w(norm_item)
+
+            # Special conversions for motors
+            if elem_type == 'motors':
+                norm_item = _normalize_motor(norm_item)
+
+            normalized[elem_type].append(norm_item)
+
+    return normalized
+
+
+def _normalize_generator(item: dict) -> dict:
+    """Apply special conversions for generator fields."""
+    # Convert Xd_pp from p.u. to % if it's small (< 1.0 suggests p.u.)
+    # Note: validation layer also handles this, but we do it here for
+    # consistency with ra_ohm conversion
+    if 'Xd_pp' in item and item['Xd_pp'] is not None:
+        if item['Xd_pp'] < 1.0:
+            item['Xd_pp'] = item['Xd_pp'] * 100
+
+    # Convert Ra from ohms to % (special case not handled by validator)
+    if 'Ra_ohm' in item and item['Ra_ohm'] is not None:
+        # Need Sn and Un to convert
+        Sn = item.get('Sn', 0)
+        Un = item.get('Un', 0)
+        if Sn > 0 and Un > 0:
+            Zbase = (Un ** 2) / Sn
+            Ra_pu = item['Ra_ohm'] / Zbase
+            # Set as p.u. value - the validator will convert to %
+            item['Ra'] = Ra_pu
+        del item['Ra_ohm']
+
+    # Do NOT convert Ra from p.u. to % here - the validator handles that
+    # to avoid double conversion
+
+    return item
+
+
+def _normalize_motor(item: dict) -> dict:
+    """Apply special conversions for motor fields."""
+    # Convert Sn from kVA to Pn in kW (assuming cos_phi if available)
+    if 'Sn_kVA' in item and item['Sn_kVA'] is not None:
+        cos_phi = item.get('cos_phi', 0.85)  # Default power factor
+        # Pn = Sn * cos_phi (in same units, so kVA * cos_phi = kW)
+        item['Pn'] = item['Sn_kVA'] * cos_phi
+        del item['Sn_kVA']
+
+    return item
+
+
+def _normalize_transformer_2w(item: dict) -> dict:
+    """Apply special conversions for 2W transformer fields."""
+    # uk might be given without _percent suffix but as percentage
+    if 'uk' in item and 'uk_percent' not in item:
+        item['uk_percent'] = item['uk']
+        del item['uk']
+
+    return item
 
 
 class ImportError(Exception):
@@ -361,7 +536,10 @@ def import_from_json(data: bytes | str) -> dict[str, Any]:
     if not isinstance(raw_elements, dict):
         raise ImportError("JSON must be an object with element arrays")
 
-    validated, errors = validate_elements(raw_elements)
+    # Normalize field names from alternative formats
+    normalized = normalize_elements(raw_elements)
+
+    validated, errors = validate_elements(normalized)
 
     if errors:
         raise ImportError(

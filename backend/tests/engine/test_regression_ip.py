@@ -659,5 +659,120 @@ class TestXLSXRoundTrip:
         assert gen["Ra"] == 0.5, f"Ra should be 0.5% (auto-converted from 0.005 p.u.), got {gen['Ra']}"
 
 
+class TestImportNormalization:
+    """Test import field name normalization for alternative formats."""
+
+    def test_normalize_transformer_field_names(self):
+        """Test that alternative transformer field names are normalized."""
+        from app.services.import_network import import_from_json
+        import json
+
+        # Alternative format with different field names
+        data = {
+            "busbars": [
+                {"id": "hv", "Un": 22.0},
+                {"id": "lv", "Un": 6.3}
+            ],
+            "transformers": [{  # 'transformers' instead of 'transformers_2w'
+                "id": "tr1",
+                "hv_bus_id": "hv",  # 'hv_bus_id' instead of 'bus_hv'
+                "lv_bus_id": "lv",  # 'lv_bus_id' instead of 'bus_lv'
+                "sn_mva": 10.0,     # 'sn_mva' instead of 'Sn'
+                "un1_kv": 22.0,     # 'un1_kv' instead of 'Un_hv'
+                "un2_kv": 6.3,      # 'un2_kv' instead of 'Un_lv'
+                "uk_percent": 7.08,
+                "pkr_kw": 60.915,   # 'pkr_kw' instead of 'Pkr'
+                "vector_group": "Dyn11"
+            }]
+        }
+
+        validated = import_from_json(json.dumps(data))
+
+        assert "transformers_2w" in validated
+        tr = validated["transformers_2w"][0]
+        assert tr["bus_hv"] == "hv"
+        assert tr["bus_lv"] == "lv"
+        assert tr["Sn"] == 10.0
+        assert tr["Un_hv"] == 22.0
+        assert tr["Un_lv"] == 6.3
+        assert tr["Pkr"] == 60.915
+
+    def test_normalize_generator_field_names(self):
+        """Test that alternative generator field names are normalized."""
+        from app.services.import_network import import_from_json
+        import json
+
+        data = {
+            "busbars": [
+                {"id": "bus1", "Un": 6.3}
+            ],
+            "generators": [{
+                "id": "gen1",
+                "bus_id": "bus1",
+                "sn_mva": 10.0,    # 'sn_mva' instead of 'Sn'
+                "un_kv": 6.3,      # 'un_kv' instead of 'Un'
+                "xdpp_pu": 0.15,   # 'xdpp_pu' instead of 'Xd_pp' (also p.u.)
+                "cos_phi": 0.85
+            }]
+        }
+
+        validated = import_from_json(json.dumps(data))
+
+        gen = validated["generators"][0]
+        assert gen["Sn"] == 10.0
+        assert gen["Un"] == 6.3
+        assert gen["Xd_pp"] == 15.0  # Converted from 0.15 p.u. to 15%
+
+    def test_normalize_bus_field_names(self):
+        """Test that alternative bus field names are normalized."""
+        from app.services.import_network import import_from_json
+        import json
+
+        data = {
+            "buses": [{  # 'buses' instead of 'busbars'
+                "id": "bus1",
+                "un_kv": 22.0  # 'un_kv' instead of 'Un'
+            }]
+        }
+
+        validated = import_from_json(json.dumps(data))
+
+        assert "busbars" in validated
+        bus = validated["busbars"][0]
+        assert bus["Un"] == 22.0
+
+    def test_normalize_generator_ra_from_ohms(self):
+        """Test conversion of Ra from ohms to percent."""
+        from app.services.import_network import import_from_json
+        import json
+
+        # Generator with 10 MVA, 6.3 kV
+        # Zbase = 6.3^2 / 10 = 3.969 Ω
+        # Ra_ohm = 0.01 Ω
+        # Ra_pu = 0.01 / 3.969 = 0.00252
+        # Ra_% = 0.252
+        data = {
+            "busbars": [
+                {"id": "bus1", "Un": 6.3}
+            ],
+            "generators": [{
+                "id": "gen1",
+                "bus_id": "bus1",
+                "sn_mva": 10.0,
+                "un_kv": 6.3,
+                "xdpp_pu": 0.15,
+                "ra_ohm": 0.01,  # Ra in ohms
+                "cos_phi": 0.85
+            }]
+        }
+
+        validated = import_from_json(json.dumps(data))
+
+        gen = validated["generators"][0]
+        # Ra should be converted to % via p.u.
+        expected_ra = (0.01 / 3.969) * 100  # ≈ 0.252%
+        assert abs(gen["Ra"] - expected_ra) < 0.01
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
