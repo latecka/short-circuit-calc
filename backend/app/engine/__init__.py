@@ -33,6 +33,8 @@ from .autotransformer import Autotransformer, Z0Source
 
 from .psu import PowerStationUnit
 
+from .ybus import YBusBuilder, YBusResult
+
 from .network import Network
 
 from .validators import (
