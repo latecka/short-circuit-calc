@@ -21,6 +21,7 @@ from app.engine.network import Network
 from app.engine.elements import (
     Busbar, ExternalGrid, Line, Transformer2W, Transformer3W,
     SynchronousGenerator, AsynchronousMotor, Impedance, GroundingImpedance,
+    InputMode,
 )
 from app.engine.autotransformer import Autotransformer
 from app.engine.psu import PowerStationUnit
@@ -445,12 +446,13 @@ def _build_network_from_elements(elements: dict) -> Network:
 
     # Add motors
     for motor_data in elements.get("motors", []):
+        mode = InputMode(motor_data.get("input_mode", "power"))
         motor = AsynchronousMotor(
             id=motor_data["id"],
             name=motor_data.get("name"),
             bus_id=motor_data["bus_id"],
             Un=motor_data["Un"],
-            input_mode=motor_data.get("input_mode", "power"),
+            input_mode=mode,
             Pn=motor_data.get("Pn"),
             eta=motor_data.get("eta"),
             cos_phi=motor_data.get("cos_phi"),
