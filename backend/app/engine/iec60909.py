@@ -156,6 +156,8 @@ class ShortCircuitCalculator:
         self._impedance_cache: Dict[str, Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]] = {}
         self._ybus_result: Optional[YBusResult] = None
         self._ybus_mode: Optional[bool] = None  # tracks is_max for cache validity
+        self._meshed_warning_shown: bool = False  # show meshed warning only once
+        self._is_meshed: Optional[bool] = None  # cached topology detection
 
     def calculate(
         self,
@@ -611,8 +613,8 @@ class ShortCircuitCalculator:
             # IEC 60909-0 equation 54
             kappa = 1.02 + 0.98 * math.exp(-3 * R_X)
 
-        # Check if network is meshed and add warning
-        if bus_id and warnings is not None:
+        # Check if network is meshed and add warning (only once per calculator instance)
+        if bus_id and warnings is not None and not self._meshed_warning_shown:
             is_meshed = self._is_meshed_topology()
             if is_meshed:
                 warnings.append(
@@ -620,6 +622,7 @@ class ShortCircuitCalculator:
                     "Method A (IEC 60909-0 §4.3.1.1). For higher accuracy, "
                     "Method B or C may be required for meshed networks."
                 )
+                self._meshed_warning_shown = True
 
         ip = kappa * math.sqrt(2) * Ik
 
@@ -638,6 +641,10 @@ class ShortCircuitCalculator:
         Returns:
             True if network appears to be meshed
         """
+        # Return cached result if available
+        if self._is_meshed is not None:
+            return self._is_meshed
+
         # Count buses and branches
         buses = list(self.network.get_elements_by_type(Busbar))
         n_buses = len(buses)
@@ -675,7 +682,9 @@ class ShortCircuitCalculator:
         has_cycles = n_branches > (n_buses - 1)
         has_multiple_sources = n_sources > 1
 
-        return has_cycles or has_multiple_sources
+        # Cache result
+        self._is_meshed = has_cycles or has_multiple_sources
+        return self._is_meshed
 
     def _get_correction_factors(self, is_max: bool) -> Dict[str, float]:
         """Collect all correction factors used."""

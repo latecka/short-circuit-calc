@@ -609,7 +609,7 @@ class TestXLSXRoundTrip:
         assert tr["Pkr"] == 150.0, f"Pkr should be 150.0, got {tr['Pkr']}"
 
     def test_import_preserves_ra(self):
-        """Test that import preserves Ra values."""
+        """Test that import preserves Ra values in % (values >= 1.0 stay as-is)."""
         from app.services.import_network import import_from_json
         import json
 
@@ -623,7 +623,7 @@ class TestXLSXRoundTrip:
                 "Sn": 50.0,
                 "Un": 22.0,
                 "Xd_pp": 15.0,
-                "Ra": 0.5,
+                "Ra": 1.5,  # Value >= 1.0 won't be auto-converted
                 "cos_phi": 0.85
             }]
         }
@@ -631,7 +631,32 @@ class TestXLSXRoundTrip:
         validated = import_from_json(json.dumps(data))
 
         gen = validated["generators"][0]
-        assert gen["Ra"] == 0.5, f"Ra should be 0.5, got {gen['Ra']}"
+        assert gen["Ra"] == 1.5, f"Ra should be 1.5, got {gen['Ra']}"
+
+    def test_import_converts_ra_from_pu(self):
+        """Test that import auto-converts Ra from p.u. to % when value < 1.0."""
+        from app.services.import_network import import_from_json
+        import json
+
+        data = {
+            "busbars": [
+                {"id": "bus1", "Un": 22.0}
+            ],
+            "generators": [{
+                "id": "gen1",
+                "bus_id": "bus1",
+                "Sn": 50.0,
+                "Un": 22.0,
+                "Xd_pp": 15.0,
+                "Ra": 0.005,  # 0.5% as p.u.
+                "cos_phi": 0.85
+            }]
+        }
+
+        validated = import_from_json(json.dumps(data))
+
+        gen = validated["generators"][0]
+        assert gen["Ra"] == 0.5, f"Ra should be 0.5% (auto-converted from 0.005 p.u.), got {gen['Ra']}"
 
 
 if __name__ == "__main__":
