@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectsApi } from '../api/client';
 import Layout from '../components/Layout';
-import { Button, Input, Card, CardBody, Modal, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../components/ui';
+import { Button, Input, Card, CardBody, Modal, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../components/ui';
 
 export default function Projects() {
   const [projects, setProjects] = useState([]);
@@ -19,7 +19,8 @@ export default function Projects() {
 
   // Search and sort state
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOption, setSortOption] = useState('updated_desc');
+  const [sortField, setSortField] = useState('updated_at');
+  const [sortDir, setSortDir] = useState('desc');
 
   // Versions modal state
   const [versionsProject, setVersionsProject] = useState(null);
@@ -45,22 +46,51 @@ export default function Projects() {
 
     // Sort
     result.sort((a, b) => {
-      switch (sortOption) {
-        case 'updated_desc':
-          return new Date(b.updated_at) - new Date(a.updated_at);
-        case 'updated_asc':
-          return new Date(a.updated_at) - new Date(b.updated_at);
-        case 'name_asc':
-          return a.name.localeCompare(b.name, 'sk');
-        case 'name_desc':
-          return b.name.localeCompare(a.name, 'sk');
-        default:
-          return 0;
+      let cmp = 0;
+      if (sortField === 'updated_at') {
+        cmp = new Date(a.updated_at) - new Date(b.updated_at);
+      } else if (sortField === 'name') {
+        cmp = a.name.localeCompare(b.name, 'sk');
+      } else if (sortField === 'description') {
+        const descA = a.description || '';
+        const descB = b.description || '';
+        cmp = descA.localeCompare(descB, 'sk');
       }
+      return sortDir === 'desc' ? -cmp : cmp;
     });
 
     return result;
-  }, [projects, searchQuery, sortOption]);
+  }, [projects, searchQuery, sortField, sortDir]);
+
+  // Toggle sort on column header click
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir(field === 'updated_at' ? 'desc' : 'asc');
+    }
+  };
+
+  // Sort indicator component
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-4 h-4 ml-1 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortDir === 'asc' ? (
+      <svg className="w-4 h-4 ml-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 ml-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  };
 
   const loadProjects = async () => {
     try {
@@ -183,9 +213,9 @@ export default function Projects() {
         </Card>
       ) : (
         <>
-          {/* Search and Sort Controls */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="relative flex-1 min-w-0">
+          {/* Search Control */}
+          <div className="mb-4">
+            <div className="relative max-w-md">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -196,7 +226,7 @@ export default function Projects() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Hľadať projekt..."
-                className="block w-full min-w-[200px] pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {searchQuery && (
                 <button
@@ -209,26 +239,39 @@ export default function Projects() {
                 </button>
               )}
             </div>
-            <Select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value)}
-              options={[
-                { value: 'updated_desc', label: 'Dátum úpravy ↓' },
-                { value: 'updated_asc', label: 'Dátum úpravy ↑' },
-                { value: 'name_asc', label: 'Názov A→Z' },
-                { value: 'name_desc', label: 'Názov Z→A' },
-              ]}
-              className="w-full sm:w-auto sm:min-w-[180px] shrink-0"
-            />
           </div>
 
           <Card>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeader>Názov</TableHeader>
-                  <TableHeader>Popis</TableHeader>
-                  <TableHeader>Upravené</TableHeader>
+                  <TableHeader>
+                    <button
+                      onClick={() => handleSort('name')}
+                      className="flex items-center hover:text-blue-600 transition-colors"
+                    >
+                      Názov
+                      <SortIcon field="name" />
+                    </button>
+                  </TableHeader>
+                  <TableHeader>
+                    <button
+                      onClick={() => handleSort('description')}
+                      className="flex items-center hover:text-blue-600 transition-colors"
+                    >
+                      Popis
+                      <SortIcon field="description" />
+                    </button>
+                  </TableHeader>
+                  <TableHeader>
+                    <button
+                      onClick={() => handleSort('updated_at')}
+                      className="flex items-center hover:text-blue-600 transition-colors"
+                    >
+                      Upravené
+                      <SortIcon field="updated_at" />
+                    </button>
+                  </TableHeader>
                   <TableHeader className="w-24"></TableHeader>
                 </TableRow>
               </TableHead>
