@@ -40,7 +40,7 @@ export default function BreakerEdge({
           type="button"
           onClick={() => data?.onToggle?.(data?.breakerKey)}
           disabled={!data?.interactive}
-          className={`absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 border flex items-center justify-center ${
+          className={`absolute nodrag nopan w-3 h-3 -translate-x-1/2 -translate-y-1/2 border flex items-center justify-center ${
             isClosed
               ? 'bg-green-500 border-green-600'
               : 'bg-white border-red-600 text-red-600'
@@ -48,6 +48,7 @@ export default function BreakerEdge({
           style={{
             left: labelX,
             top: labelY,
+            pointerEvents: 'all',
           }}
           title={isClosed ? 'Vypínač zatvorený' : 'Vypínač otvorený'}
         >

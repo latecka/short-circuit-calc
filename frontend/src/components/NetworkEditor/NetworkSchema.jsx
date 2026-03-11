@@ -1,10 +1,9 @@
-import { useMemo, useState, useCallback } from 'react';
-import ReactFlow, { Background, Controls, MiniMap } from 'reactflow';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import ReactFlow, { Background, Controls, MiniMap, useNodesState, useEdgesState } from 'reactflow';
 import BreakerEdge from './BreakerEdge';
 import { Button } from '../ui';
 
 const edgeTypes = { breaker: BreakerEdge };
-
 
 function flattenBreakers(elements) {
   const breakers = {};
@@ -169,6 +168,17 @@ export default function NetworkSchema({
     return { nodes, edges, breakersBase };
   }, [elements, breakerStates, mode, onToggleBreaker, layoutSeed]);
 
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
+
+  useEffect(() => {
+    setNodes(graph.nodes);
+  }, [graph.nodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(graph.edges);
+  }, [graph.edges, setEdges]);
+
   const handleNodeClick = useCallback((_, node) => {
     setSelected(node);
   }, []);
@@ -193,8 +203,10 @@ export default function NetworkSchema({
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
         <div className="lg:col-span-3 h-[560px] border rounded-lg overflow-hidden bg-white">
           <ReactFlow
-            nodes={graph.nodes}
-            edges={graph.edges}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
             edgeTypes={edgeTypes}
             fitView
             nodesDraggable={mode === 'edit'}

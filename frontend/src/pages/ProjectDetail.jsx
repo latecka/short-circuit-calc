@@ -11,6 +11,20 @@ import { Button, Card, CardHeader, CardBody, Input } from '../components/ui';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+const DEFAULT_ELEMENTS = {
+  busbars: [],
+  external_grids: [],
+  lines: [],
+  transformers_2w: [],
+  transformers_3w: [],
+  autotransformers: [],
+  generators: [],
+  motors: [],
+  psus: [],
+  impedances: [],
+  grounding_impedances: [],
+};
+
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const [searchParams] = useSearchParams();
@@ -20,19 +34,7 @@ export default function ProjectDetail() {
   const [currentVersion, setCurrentVersion] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef(null);
-  const [elements, setElements] = useState({
-    busbars: [],
-    external_grids: [],
-    lines: [],
-    transformers_2w: [],
-    transformers_3w: [],
-    autotransformers: [],
-    generators: [],
-    motors: [],
-    psus: [],
-    impedances: [],
-    grounding_impedances: [],
-  });
+  const [elements, setElements] = useState(DEFAULT_ELEMENTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [calcResult, setCalcResult] = useState(null);
@@ -109,19 +111,7 @@ export default function ProjectDetail() {
   const loadVersion = async (versionId) => {
     const versionData = await projectsApi.getVersion(projectId, versionId);
     setCurrentVersion(versionData);
-    setElements(versionData.elements || {
-      busbars: [],
-      external_grids: [],
-      lines: [],
-      transformers_2w: [],
-      transformers_3w: [],
-      autotransformers: [],
-      generators: [],
-      motors: [],
-      psus: [],
-      impedances: [],
-      grounding_impedances: [],
-    });
+    setElements(versionData.elements || DEFAULT_ELEMENTS);
     setHasChanges(false);
   };
 
