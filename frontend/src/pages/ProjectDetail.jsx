@@ -391,12 +391,14 @@ export default function ProjectDetail() {
           >
             Uložiť
           </Button>
-          <Button onClick={() => setShowCalcModal(true)}>
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Výpočet
-          </Button>
+          {activeTab === 'scenarios' && (
+            <Button onClick={() => setShowCalcModal(true)}>
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Výpočet
+            </Button>
+          )}
         </div>
       </div>
 
@@ -528,44 +530,49 @@ export default function ProjectDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="xl:col-span-1">
+      {activeTab === 'elements' ? (
+        <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold">
-              {activeTab === 'elements' ? 'Editor siete' : 'Správa scenárov'}
-            </h2>
+            <h2 className="text-lg font-semibold">Editor siete</h2>
           </CardHeader>
-          <CardBody className={activeTab === 'elements' ? 'p-0' : ''}>
-            {activeTab === 'elements' ? (
-              <NetworkEditor elements={elements} onChange={handleElementsChange} />
-            ) : (
+          <CardBody className="p-0">
+            <NetworkEditor elements={elements} onChange={handleElementsChange} />
+          </CardBody>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Card className="xl:col-span-1">
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Správa scenárov</h2>
+            </CardHeader>
+            <CardBody>
               <ScenarioManager
                 projectId={projectId}
                 elements={elements}
                 onCalculationComplete={(result) => setCalcResult(result)}
               />
-            )}
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
 
-        <Card className="xl:col-span-1">
-          <CardHeader>
-            <h2 className="text-lg font-semibold">Výsledky</h2>
-          </CardHeader>
-          <CardBody>
-            {calcResult ? (
-              <CalculationResults result={calcResult} />
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <p className="mt-4">Spustite výpočet pre zobrazenie výsledkov</p>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      </div>
+          <Card className="xl:col-span-1">
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Výsledky</h2>
+            </CardHeader>
+            <CardBody>
+              {calcResult ? (
+                <CalculationResults result={calcResult} />
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <p className="mt-4">Spustite výpočet pre zobrazenie výsledkov</p>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      )}
 
       {/* Calculation Modal */}
       <Modal isOpen={showCalcModal} onClose={() => setShowCalcModal(false)} title="Spustiť výpočet">
