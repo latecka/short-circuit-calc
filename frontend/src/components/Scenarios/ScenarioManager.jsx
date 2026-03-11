@@ -3,7 +3,7 @@ import { scenariosApi, calculationsApi } from '../../api/client';
 import { Button, Modal, Input, Select } from '../ui';
 import NetworkSchema from '../NetworkEditor/NetworkSchema';
 
-export default function ScenarioManager({ projectId, elements, onCalculationComplete }) {
+export default function ScenarioManager({ projectId, elements, layoutPositions, onCalculationComplete }) {
   const [scenarios, setScenarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedScenario, setSelectedScenario] = useState(null);
@@ -176,6 +176,7 @@ export default function ScenarioManager({ projectId, elements, onCalculationComp
           elements={elements}
           mode="scenario"
           breakerStates={normalizedBreakerStates}
+          layoutPositions={layoutPositions}
           onToggleBreaker={handleToggleBreaker}
         />
 

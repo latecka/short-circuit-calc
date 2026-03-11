@@ -23,6 +23,7 @@ const DEFAULT_ELEMENTS = {
   psus: [],
   impedances: [],
   grounding_impedances: [],
+  __schema_layout: {},
 };
 
 export default function ProjectDetail() {
@@ -42,6 +43,7 @@ export default function ProjectDetail() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [activeTab, setActiveTab] = useState('elements'); // 'elements' | 'scenarios'
+  const [schemaLayout, setSchemaLayout] = useState({});
   const [metadata, setMetadata] = useState({
     client_name: '',
     client_address: '',
@@ -111,7 +113,12 @@ export default function ProjectDetail() {
   const loadVersion = async (versionId) => {
     const versionData = await projectsApi.getVersion(projectId, versionId);
     setCurrentVersion(versionData);
-    setElements(versionData.elements || DEFAULT_ELEMENTS);
+    const savedElements = versionData.elements || DEFAULT_ELEMENTS;
+    const savedLayout = savedElements.__schema_layout || {};
+    const pureElements = { ...savedElements };
+    delete pureElements.__schema_layout;
+    setElements(pureElements);
+    setSchemaLayout(savedLayout);
     setHasChanges(false);
   };
 
@@ -125,7 +132,7 @@ export default function ProjectDetail() {
     try {
       const newVersion = await projectsApi.createVersion(
         projectId,
-        elements,
+        { ...elements, __schema_layout: schemaLayout },
         `Verzia ${versions.length + 1}`
       );
       setVersions([...versions, newVersion]);
@@ -191,7 +198,7 @@ export default function ProjectDetail() {
         created_at: project?.created_at || '',
         updated_at: project?.updated_at || '',
       },
-      network_elements: elements,
+      network_elements: { ...elements, __schema_layout: schemaLayout },
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -456,6 +463,8 @@ export default function ProjectDetail() {
                 elements={elements}
                 mode="edit"
                 onSave={handleSave}
+                layoutPositions={schemaLayout}
+                onLayoutChange={setSchemaLayout}
               />
             </CardBody>
           </Card>
@@ -479,6 +488,7 @@ export default function ProjectDetail() {
               <ScenarioManager
                 projectId={projectId}
                 elements={elements}
+                layoutPositions={schemaLayout}
                 onCalculationComplete={(result) => setCalcResult(result)}
               />
             </CardBody>

@@ -47,6 +47,8 @@ export default function NetworkSchema({
   breakerStates,
   onToggleBreaker,
   onSave,
+  layoutPositions,
+  onLayoutChange,
 }) {
   const [selected, setSelected] = useState(null);
   const [layoutSeed, setLayoutSeed] = useState(0);
@@ -74,10 +76,12 @@ export default function NetworkSchema({
         const x = 150 + j * 280 + layoutSeed * 0;
         const y = 80 + idx * 170;
         busPositions.set(bus.id, { x, y, Un: bus.Un });
+        const nodeId = `bus:${bus.id}`;
+        const overriddenPos = layoutPositions?.[nodeId];
         nodes.push({
-          id: `bus:${bus.id}`,
+          id: nodeId,
           type: 'default',
-          position: { x, y },
+          position: overriddenPos || { x, y },
           data: { label: `${bus.name || bus.id} (${bus.Un} kV)` },
           draggable: mode === 'edit',
           style: { border: '2px solid #1d4ed8', borderRadius: 10, background: '#eff6ff' },
@@ -91,9 +95,10 @@ export default function NetworkSchema({
       if (!busPos) return;
       const id = `eq:${type}:${item.id}`;
       const active = isEquipmentActive(keys, mergedBreakers);
+      const defaultPos = { x: busPos.x + 180 + (index % 3) * 45, y: busPos.y - 90 + Math.floor(index / 3) * 55 };
       nodes.push({
         id,
-        position: { x: busPos.x + 180 + (index % 3) * 45, y: busPos.y - 90 + Math.floor(index / 3) * 55 },
+        position: layoutPositions?.[id] || defaultPos,
         data: { label: item.name || item.id, raw: item, type },
         draggable: mode === 'edit',
         style: {
@@ -135,9 +140,10 @@ export default function NetworkSchema({
       if (!p1 || !p2) return;
       const nodeId = `eq:line:${line.id}`;
       const active = mergedBreakers[line.id] !== false;
+      const defaultPos = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 - 45 };
       nodes.push({
         id: nodeId,
-        position: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 - 45 },
+        position: layoutPositions?.[nodeId] || defaultPos,
         data: { label: line.name || line.id, raw: line, type: 'lines' },
         draggable: mode === 'edit',
         style: { border: '1px solid #94a3b8', borderRadius: 8, background: '#fff', opacity: active ? 1 : 0.25, filter: active ? 'none' : 'grayscale(1)' },
@@ -156,9 +162,10 @@ export default function NetworkSchema({
       const nodeId = `eq:tr:${tr.id}`;
       const keys = [`${tr.id}_HV`, `${tr.id}_LV`];
       const active = isEquipmentActive(keys, mergedBreakers);
+      const defaultPos = { x: (p1.x + p2.x) / 2 + 30, y: (p1.y + p2.y) / 2 };
       nodes.push({
         id: nodeId,
-        position: { x: (p1.x + p2.x) / 2 + 30, y: (p1.y + p2.y) / 2 },
+        position: layoutPositions?.[nodeId] || defaultPos,
         data: { label: tr.name || tr.id, raw: tr, type: 'transformer' },
         draggable: mode === 'edit',
         style: { border: '1px solid #94a3b8', borderRadius: 8, background: '#fff', opacity: active ? 1 : 0.25, filter: active ? 'none' : 'grayscale(1)' },
@@ -168,7 +175,7 @@ export default function NetworkSchema({
     });
 
     return { nodes, edges, breakersBase };
-  }, [elements, breakerStates, mode, onToggleBreaker, layoutSeed]);
+  }, [elements, breakerStates, mode, onToggleBreaker, layoutSeed, layoutPositions]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
@@ -185,6 +192,16 @@ export default function NetworkSchema({
     setSelected(node);
   }, []);
 
+  const persistLayout = useCallback((sourceNodes) => {
+    if (!onLayoutChange) return;
+    const next = {};
+    (sourceNodes || []).forEach((n) => {
+      next[n.id] = { x: n.position.x, y: n.position.y };
+    });
+    onLayoutChange(next);
+  }, [onLayoutChange]);
+
+
   return (
     <div className="space-y-3">
       <div className={`rounded-lg border px-3 py-2 flex items-center justify-between ${mode === 'scenario' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
@@ -195,7 +212,7 @@ export default function NetworkSchema({
         </div>
         {mode === 'edit' && (
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setLayoutSeed((s) => s + 1)}>Auto rozloženie</Button>
+            <Button size="sm" variant="secondary" onClick={() => { setLayoutSeed((s) => s + 1); onLayoutChange?.({}); }}>Auto rozloženie</Button>
             <Button size="sm" variant="secondary" onClick={onSave}>Uložiť</Button>
             <Button size="sm" variant="secondary" onClick={() => window.print()}>Exportovať PNG</Button>
           </div>
@@ -215,6 +232,7 @@ export default function NetworkSchema({
             nodesConnectable={false}
             elementsSelectable
             onNodeClick={handleNodeClick}
+            onNodeDragStop={(_, __, currentNodes) => persistLayout(currentNodes)}
             proOptions={{ hideAttribution: true }}
           >
             <MiniMap zoomable pannable />
