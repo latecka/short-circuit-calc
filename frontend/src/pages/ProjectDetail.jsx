@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { projectsApi, calculationsApi } from '../api/client';
+import { projectsApi } from '../api/client';
 import Layout from '../components/Layout';
 import NetworkEditor from '../components/NetworkEditor/NetworkEditor';
+import NetworkSchema from '../components/NetworkEditor/NetworkSchema';
 import ImportModal from '../components/NetworkEditor/ImportModal';
 import CalculationResults from '../components/Results/CalculationResults';
 import ScenarioManager from '../components/Scenarios/ScenarioManager';
-import { Button, Card, CardHeader, CardBody, Modal, Input, Select } from '../components/ui';
+import { Button, Card, CardHeader, CardBody, Input } from '../components/ui';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -34,11 +35,6 @@ export default function ProjectDetail() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showCalcModal, setShowCalcModal] = useState(false);
-  const [calcMode, setCalcMode] = useState('max');
-  const [calcFaultTypes, setCalcFaultTypes] = useState(['Ik3', 'Ik2', 'Ik1']);
-  const [calcBuses, setCalcBuses] = useState([]);
-  const [calculating, setCalculating] = useState(false);
   const [calcResult, setCalcResult] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -150,69 +146,6 @@ export default function ProjectDetail() {
       alert('Uloženie zlyhalo');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRunCalculation = async () => {
-    if (!currentVersion && !hasChanges) {
-      alert('Najprv uložte zmeny');
-      return;
-    }
-
-    // If there are unsaved changes, save first
-    let versionId = currentVersion?.id;
-    if (hasChanges) {
-      setSaving(true);
-      try {
-        const newVersion = await projectsApi.createVersion(
-          projectId,
-          elements,
-          `Verzia ${versions.length + 1}`
-        );
-        setVersions([...versions, newVersion]);
-        setCurrentVersion(newVersion);
-        setHasChanges(false);
-        versionId = newVersion.id;
-      } catch (err) {
-        console.error('Failed to save version:', err);
-        alert('Uloženie zlyhalo');
-        setSaving(false);
-        return;
-      }
-      setSaving(false);
-    }
-
-    setCalculating(true);
-    setCalcResult(null);
-    try {
-      const result = await calculationsApi.run(
-        versionId,
-        calcMode,
-        calcFaultTypes,
-        calcBuses.length > 0 ? calcBuses : elements.busbars.map(b => b.id)
-      );
-      // Load full results
-      const fullResult = await calculationsApi.get(result.id);
-      setCalcResult(fullResult);
-      setShowCalcModal(false);
-
-      // Show error if calculation failed
-      if (fullResult.status === 'failed' && fullResult.error_message) {
-        alert('Výpočet zlyhal: ' + fullResult.error_message);
-      }
-    } catch (err) {
-      console.error('Calculation failed:', err);
-      alert('Výpočet zlyhal: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setCalculating(false);
-    }
-  };
-
-  const toggleFaultType = (type) => {
-    if (calcFaultTypes.includes(type)) {
-      setCalcFaultTypes(calcFaultTypes.filter(t => t !== type));
-    } else {
-      setCalcFaultTypes([...calcFaultTypes, type]);
     }
   };
 
@@ -391,14 +324,6 @@ export default function ProjectDetail() {
           >
             Uložiť
           </Button>
-          {activeTab === 'scenarios' && (
-            <Button onClick={() => setShowCalcModal(true)}>
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Výpočet
-            </Button>
-          )}
         </div>
       </div>
 
@@ -514,7 +439,7 @@ export default function ProjectDetail() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Sieťové prvky
+            Schéma siete
           </button>
           <button
             onClick={() => setActiveTab('scenarios')}
@@ -531,19 +456,34 @@ export default function ProjectDetail() {
 
       {/* Main Content */}
       {activeTab === 'elements' ? (
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold">Editor siete</h2>
-          </CardHeader>
-          <CardBody className="p-0">
-            <NetworkEditor elements={elements} onChange={handleElementsChange} />
-          </CardBody>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card className="xl:col-span-1">
+        <div className="space-y-6">
+          <Card>
             <CardHeader>
-              <h2 className="text-lg font-semibold">Správa scenárov</h2>
+              <h2 className="text-lg font-semibold">Schéma siete</h2>
+            </CardHeader>
+            <CardBody>
+              <NetworkSchema
+                elements={elements}
+                mode="edit"
+                onSave={handleSave}
+              />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Editor parametrov prvkov</h2>
+            </CardHeader>
+            <CardBody className="p-0">
+              <NetworkEditor elements={elements} onChange={handleElementsChange} />
+            </CardBody>
+          </Card>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Scenáre</h2>
             </CardHeader>
             <CardBody>
               <ScenarioManager
@@ -554,7 +494,7 @@ export default function ProjectDetail() {
             </CardBody>
           </Card>
 
-          <Card className="xl:col-span-1">
+          <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold">Výsledky</h2>
             </CardHeader>
@@ -573,86 +513,6 @@ export default function ProjectDetail() {
           </Card>
         </div>
       )}
-
-      {/* Calculation Modal */}
-      <Modal isOpen={showCalcModal} onClose={() => setShowCalcModal(false)} title="Spustiť výpočet">
-        <div className="space-y-4">
-          <Select
-            label="Režim výpočtu"
-            value={calcMode}
-            onChange={(e) => setCalcMode(e.target.value)}
-            options={[
-              { value: 'max', label: 'Maximum (Ik max)' },
-              { value: 'min', label: 'Minimum (Ik min)' },
-            ]}
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Typy porúch
-            </label>
-            <div className="flex space-x-4">
-              {['Ik3', 'Ik2', 'Ik1'].map((type) => (
-                <label key={type} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={calcFaultTypes.includes(type)}
-                    onChange={() => toggleFaultType(type)}
-                    className="h-4 w-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">{type}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Uzly poruchy
-            </label>
-            <p className="text-sm text-gray-500 mb-2">
-              {elements.busbars.length === 0
-                ? 'Pridajte najprv uzly do siete'
-                : 'Vyberte uzly alebo nechajte prázdne pre výpočet na všetkých'
-              }
-            </p>
-            <div className="max-h-40 overflow-y-auto border rounded-lg p-2">
-              {elements.busbars.map((bus) => (
-                <label key={bus.id} className="flex items-center py-1">
-                  <input
-                    type="checkbox"
-                    checked={calcBuses.includes(bus.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setCalcBuses([...calcBuses, bus.id]);
-                      } else {
-                        setCalcBuses(calcBuses.filter(id => id !== bus.id));
-                      }
-                    }}
-                    className="h-4 w-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">
-                    {bus.name || bus.id} ({bus.Un} kV)
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <Button variant="secondary" onClick={() => setShowCalcModal(false)}>
-              Zrušiť
-            </Button>
-            <Button
-              onClick={handleRunCalculation}
-              loading={calculating}
-              disabled={elements.busbars.length === 0 || calcFaultTypes.length === 0}
-            >
-              Spustiť
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Import Modal */}
       <ImportModal
