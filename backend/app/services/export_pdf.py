@@ -78,6 +78,7 @@ def generate_calculation_report(
         fontSize=10,
         spaceAfter=3*mm,
         alignment=TA_JUSTIFY,
+        fontName='DejaVu',
     )
 
     center_style = ParagraphStyle(
@@ -85,6 +86,7 @@ def generate_calculation_report(
         parent=styles['Normal'],
         fontSize=10,
         alignment=TA_CENTER,
+        fontName='DejaVu',
     )
 
     small_style = ParagraphStyle(
@@ -92,6 +94,7 @@ def generate_calculation_report(
         parent=styles['Normal'],
         fontSize=9,
         textColor=colors.gray,
+        fontName='DejaVu',
     )
 
     # Table style
@@ -100,6 +103,7 @@ def generate_calculation_report(
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'DejaVu-Bold'),
+        ('FONTNAME', (0, 1), (-1, -1), 'DejaVu'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
@@ -163,6 +167,7 @@ def generate_calculation_report(
         info_table = Table(info_data, colWidths=[45*mm, 100*mm])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'DejaVu-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'DejaVu'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
@@ -187,6 +192,7 @@ def generate_calculation_report(
 
     toc_table = Table(toc_data, colWidths=[10*mm, 120*mm, 20*mm])
     toc_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
         ('FONTSIZE', (0, 0), (-1, -1), 11),
         ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
