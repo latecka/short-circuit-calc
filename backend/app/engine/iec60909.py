@@ -35,6 +35,7 @@ from .autotransformer import Autotransformer
 from .psu import PowerStationUnit
 from .network import Network
 from .validators import NetworkValidator, CalculationValidator, ValidationResult
+from .ybus import YBusBuilder, YBusResult
 
 
 # IEC 60909-0 voltage factors (Table 1)
@@ -153,6 +154,8 @@ class ShortCircuitCalculator:
         """
         self.network = network
         self._impedance_cache: Dict[str, Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]] = {}
+        self._ybus_result: Optional[YBusResult] = None
+        self._ybus_mode: Optional[bool] = None  # tracks is_max for cache validity
 
     def calculate(
         self,
@@ -292,10 +295,14 @@ class ShortCircuitCalculator:
         is_max: bool
     ) -> Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]:
         """
-        Calculate Thevenin equivalent impedance at fault bus.
+        Calculate Thevenin equivalent impedance at fault bus using Y-bus matrix.
 
-        This simplified implementation calculates the parallel combination
-        of all source impedances seen from the fault location.
+        Builds the network admittance matrix, inverts it to obtain the
+        impedance matrix (Z-bus), and reads the diagonal element Z[i,i]
+        which equals the Thévenin impedance seen from bus i.
+
+        This approach correctly handles meshed networks where multiple
+        source paths share common segments.
 
         Args:
             bus_id: Fault location bus ID
@@ -304,138 +311,21 @@ class ShortCircuitCalculator:
         Returns:
             Tuple of (Z1, Z2, Z0)
         """
-        bus = self.network.get_bus(bus_id)
-        Un = bus.Un if bus else 1.0
-        mode = "MAX" if is_max else "MIN"
+        # Build Y-bus once per mode, then cache
+        if self._ybus_result is None or self._ybus_mode != is_max:
+            logger.debug(f"=== Building Y-bus matrix (mode={'MAX' if is_max else 'MIN'}) ===")
+            builder = YBusBuilder(self.network, is_max)
+            self._ybus_result = builder.compute()
+            self._ybus_mode = is_max
 
-        logger.debug(f"=== Thevenin impedance at {bus_id} (Un={Un} kV, mode={mode}) ===")
+        Z1, Z2, Z0 = self._ybus_result.get(bus_id)
 
-        Z1_total = ComplexImpedance(0, 0)
-        Z2_total = ComplexImpedance(0, 0)
-        Z0_total = ComplexImpedance(0, 0)
+        logger.debug(
+            f"=== Thevenin at {bus_id}: Z1={Z1.r:.6f}+j{Z1.x:.6f}, "
+            f"Z2={Z2.r:.6f}+j{Z2.x:.6f} Ω ==="
+        )
 
-        has_source = False
-
-        # Collect impedances from all sources
-        for source in self.network.get_sources():
-            if isinstance(source, ExternalGrid):
-                c = get_c_factor(Un, is_max)
-                Z1_grid, Z2, Z0 = source.get_impedance(Un, is_max)
-
-                logger.debug(
-                    f"  ExternalGrid {source.id}: Sk={'max' if is_max else 'min'}={source.Sk_max if is_max else source.Sk_min} MVA, "
-                    f"c={c}, Z1={Z1_grid.r:.6f}+j{Z1_grid.x:.6f} Ω (at {Un} kV base)"
-                )
-
-                Z1 = Z1_grid
-
-                # Add transformer impedance if source is not at fault bus
-                if source.bus_id != bus_id:
-                    Z_path = self._get_path_impedance(source.bus_id, bus_id, Un)
-                    if Z_path:
-                        logger.debug(f"    Path {source.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
-                        Z1 = Z1 + Z_path[0]
-                        Z2 = Z2 + Z_path[1]
-                        Z0 = Z0 + Z_path[2]
-
-                logger.debug(f"    → Total Z1 from {source.id}: {Z1.r:.6f}+j{Z1.x:.6f} Ω")
-
-                # Parallel combination
-                if has_source:
-                    Z1_total = Z1_total.parallel(Z1)
-                    Z2_total = Z2_total.parallel(Z2)
-                    if Z0.magnitude < 1e10 and Z0_total.magnitude < 1e10:
-                        Z0_total = Z0_total.parallel(Z0)
-                else:
-                    Z1_total = Z1
-                    Z2_total = Z2
-                    Z0_total = Z0
-                    has_source = True
-
-            elif isinstance(source, SynchronousGenerator):
-                # Check if generator is part of PSU
-                psu = self._find_psu_for_generator(source.id)
-                if psu:
-                    # Use PSU combined impedance
-                    c = get_c_factor(Un, is_max)
-                    Z1, Z2, Z0 = psu.get_combined_impedance(Un, c)
-                    logger.debug(f"  Generator {source.id} (PSU): Z1={Z1.r:.6f}+j{Z1.x:.6f} Ω (at {Un} kV base)")
-                else:
-                    # Direct connection - apply KG per IEC 60909-0 eq. 17
-                    # ZG = KG * (RG + j*Xd'')
-                    c = get_c_factor(source.Un, is_max)  # Use generator voltage for c factor
-                    Z1_base, Z2_base, Z0 = source.get_impedance(Un)
-                    KG = source.get_KG(c)
-
-                    # Calculate Zbase for debug
-                    Zbase = (source.Un ** 2) / source.Sn
-                    sin_phi = math.sqrt(1 - source.cos_phi ** 2)
-
-                    logger.debug(
-                        f"  Generator {source.id}: Sn={source.Sn} MVA, Un={source.Un} kV, "
-                        f"Xd''={source.Xd_pp}%, cos_phi={source.cos_phi}"
-                    )
-                    logger.debug(
-                        f"    Zbase={Zbase:.4f} Ω, sin_phi={sin_phi:.4f}, KG={KG:.4f}"
-                    )
-                    logger.debug(
-                        f"    Z1_base (at {Un} kV)={Z1_base.r:.6f}+j{Z1_base.x:.6f} Ω"
-                    )
-
-                    Z1 = Z1_base * KG  # IEC 60909-0 eq. 17: ZG = KG * ZG_base
-                    Z2 = Z2_base * KG  # Z2 also gets correction
-
-                    logger.debug(
-                        f"    Z1_korr = KG * Z1_base = {Z1.r:.6f}+j{Z1.x:.6f} Ω"
-                    )
-
-                # Add path impedance
-                if source.bus_id != bus_id:
-                    Z_path = self._get_path_impedance(source.bus_id, bus_id, Un)
-                    if Z_path:
-                        logger.debug(f"    Path {source.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
-                        Z1 = Z1 + Z_path[0]
-                        Z2 = Z2 + Z_path[1]
-                        # Z0 from generator is infinite, use path Z0
-
-                logger.debug(f"    → Total Z1 from {source.id}: {Z1.r:.6f}+j{Z1.x:.6f} Ω")
-
-                # Parallel combination
-                if has_source:
-                    Z1_total = Z1_total.parallel(Z1)
-                    Z2_total = Z2_total.parallel(Z2)
-                else:
-                    Z1_total = Z1
-                    Z2_total = Z2
-                    Z0_total = Z0
-                    has_source = True
-
-        # Add motor contributions for max calculation
-        if is_max:
-            for motor in self.network.get_motors():
-                if motor.include_in_sc and motor.in_service:
-                    Z1_m, Z2_m, _ = motor.get_impedance(Un)
-
-                    logger.debug(
-                        f"  Motor {motor.id}: Z1={Z1_m.r:.6f}+j{Z1_m.x:.6f} Ω (at {Un} kV base)"
-                    )
-
-                    # Add path impedance
-                    if motor.bus_id != bus_id:
-                        Z_path = self._get_path_impedance(motor.bus_id, bus_id, Un)
-                        if Z_path:
-                            logger.debug(f"    Path {motor.bus_id} → {bus_id}: Z1_path={Z_path[0].r:.6f}+j{Z_path[0].x:.6f} Ω")
-                            Z1_m = Z1_m + Z_path[0]
-                            Z2_m = Z2_m + Z_path[1]
-
-                    if Z1_m.magnitude < 1e10:
-                        Z1_total = Z1_total.parallel(Z1_m)
-                        Z2_total = Z2_total.parallel(Z2_m)
-                        logger.debug(f"    → Motor contributes, Z1_total now: {Z1_total.r:.6f}+j{Z1_total.x:.6f} Ω")
-
-        logger.debug(f"  === RESULT: Z1_total={Z1_total.r:.6f}+j{Z1_total.x:.6f} Ω ===")
-
-        return Z1_total, Z2_total, Z0_total
+        return Z1, Z2, Z0
 
     def _get_path_impedance(
         self,
