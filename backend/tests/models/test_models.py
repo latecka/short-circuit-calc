@@ -363,6 +363,47 @@ class TestScenarioModel:
         scenario.element_states = {"breakers": {"T1_HV": True, "T1_LV": True}}
         assert scenario.is_element_active("transformers_2w", "T1") is True
 
+
+    def test_breaker_schema_falls_back_to_legacy_for_missing_keys(self, session):
+        user = User(email="scenario4@example.com", hashed_password="hash")
+        session.add(user)
+        session.commit()
+        project = Project(name="Scenario Test", owner_id=user.id)
+        session.add(project)
+        session.commit()
+
+        scenario = Scenario(
+            project_id=project.id,
+            name="S4",
+            element_states={
+                "breakers": {"L1": False},
+                "generators": {"G1": False},
+            },
+        )
+
+        # Explicit breaker key wins
+        assert scenario.is_element_active("lines", "L1") is False
+        # Missing breaker key falls back to legacy schema
+        assert scenario.is_element_active("generators", "G1") is False
+        # Missing in both schemas defaults to active
+        assert scenario.is_element_active("generators", "G2") is True
+
+    def test_transformer_allows_single_breaker_key_fallback(self, session):
+        user = User(email="scenario5@example.com", hashed_password="hash")
+        session.add(user)
+        session.commit()
+        project = Project(name="Scenario Test", owner_id=user.id)
+        session.add(project)
+        session.commit()
+
+        scenario = Scenario(
+            project_id=project.id,
+            name="S5",
+            element_states={"breakers": {"T7": False}},
+        )
+
+        assert scenario.is_element_active("transformers_2w", "T7") is False
+
     def test_get_active_elements_uses_breaker_states(self, session):
         user = User(email="scenario3@example.com", hashed_password="hash")
         session.add(user)
