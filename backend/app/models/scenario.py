@@ -60,9 +60,34 @@ class Scenario(Base):
     )
 
     def is_element_active(self, element_type: str, element_id: str) -> bool:
-        """Check if an element is active in this scenario."""
+        """Check if an element is active in this scenario.
+
+        Supports both legacy shape:
+        {
+            "lines": {"L1": true}
+        }
+
+        and breaker-centric shape:
+        {
+            "breakers": {"L1": true, "T1_HV": true, "T1_LV": false}
+        }
+        """
+        # New breaker-centric schema
+        breakers = self.element_states.get("breakers")
+        if isinstance(breakers, dict):
+            if element_type in {"transformers_2w", "autotransformers"}:
+                return breakers.get(f"{element_id}_HV", True) and breakers.get(f"{element_id}_LV", True)
+            if element_type == "transformers_3w":
+                return (
+                    breakers.get(f"{element_id}_HV", True)
+                    and breakers.get(f"{element_id}_MV", True)
+                    and breakers.get(f"{element_id}_LV", True)
+                )
+            # all other non-busbar elements are represented by a single breaker id
+            return breakers.get(element_id, True)
+
+        # Legacy schema fallback
         type_states = self.element_states.get(element_type, {})
-        # Default to True if not specified
         return type_states.get(element_id, True)
 
     def set_element_state(self, element_type: str, element_id: str, active: bool):
