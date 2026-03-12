@@ -34,7 +34,8 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - VITE_API_URL=
+      - VITE_PROXY_TARGET=http://backend:8000
     command: npm run dev -- --host
     depends_on:
       - backend

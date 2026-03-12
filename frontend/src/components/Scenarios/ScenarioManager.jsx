@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { scenariosApi, calculationsApi } from '../../api/client';
 import { Button, Modal, Input, Select } from '../ui';
 import NetworkSchema from '../NetworkEditor/NetworkSchema';
@@ -114,7 +114,10 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
 
       if (result.status === 'completed') {
         const fullResult = await calculationsApi.get(result.run_id);
-        onCalculationComplete?.(fullResult);
+        onCalculationComplete?.({
+          ...fullResult,
+          onCaptureSchema: handleCaptureSchema,
+        });
         setShowRunModal(false);
       } else {
         alert('Výpočet zlyhal: ' + result.message);

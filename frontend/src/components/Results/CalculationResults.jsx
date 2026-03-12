@@ -65,9 +65,24 @@ export default function CalculationResults({ result }) {
     setExporting(format);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/v1/export/${format}/${result.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let response;
+
+      if (format === 'pdf' && result.onCaptureSchema) {
+        // Capture schema image from React Flow and send as POST
+        const schemaImage = await result.onCaptureSchema();
+        response = await fetch(`${API_URL}/api/v1/export/${format}/${result.id}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ schema_image: schemaImage }),
+        });
+      } else {
+        response = await fetch(`${API_URL}/api/v1/export/${format}/${result.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       if (!response.ok) throw new Error('Export failed');
 
