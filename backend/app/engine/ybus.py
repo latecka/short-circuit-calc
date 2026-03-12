@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -93,15 +93,24 @@ class YBusBuilder:
     def _init_buses(self) -> None:
         """Build bus index map and per-unit bases.
 
-        Excludes PSU generator-side buses since these are modelled as part
-        of the PSU shunt at the network-side bus.
+        Excludes:
+        - PSU generator-side buses (modelled as part of PSU shunt)
+        - Isolated buses (no path to any voltage source)
         """
         # Identify generator-side buses in PSUs (these are internal to PSU model)
         psu_gen_buses = self._get_psu_generator_buses()
 
+        # Identify buses reachable from sources
+        reachable_buses = self._get_reachable_buses()
+
         for bus in self.network.get_elements_by_type(Busbar):
             if bus.id in psu_gen_buses:
                 # Skip generator-side buses - they're part of PSU model
+                continue
+
+            if bus.id not in reachable_buses:
+                # Skip isolated buses - they have no path to sources
+                logger.warning(f"Bus {bus.id} is isolated (no path to source) - excluded from Y-bus")
                 continue
 
             idx = len(self._bus_ids)
@@ -109,6 +118,83 @@ class YBusBuilder:
             self._bus_index[bus.id] = idx
             self._bus_un[bus.id] = bus.Un
             self._bus_zbase[bus.id] = (bus.Un ** 2) / S_BASE if bus.Un > 0 else 1.0
+
+
+    def _get_reachable_buses(self) -> set:
+        """Find all buses reachable from voltage sources via in-service elements.
+
+        Uses BFS starting from buses with sources attached.
+        """
+        # Find source buses
+        source_buses = set()
+        for grid in self.network.get_elements_by_type(ExternalGrid):
+            if grid.in_service:
+                source_buses.add(grid.bus_id)
+        for gen in self.network.get_elements_by_type(SynchronousGenerator):
+            if gen.in_service:
+                source_buses.add(gen.bus_id)
+        # PSU sources
+        for psu in self.network.get_psus():
+            if psu._generator is not None and psu._generator.in_service:
+                if psu._transformer is not None:
+                    if isinstance(psu._transformer, Transformer2W):
+                        source_buses.add(psu._transformer.bus_hv)
+                    elif isinstance(psu._transformer, Transformer3W):
+                        source_buses.add(psu._transformer.bus_hv)
+
+        if not source_buses:
+            return set()
+
+        # Build adjacency from in-service branch elements
+        adjacency: Dict[str, Set[str]] = {}
+        all_buses = {b.id for b in self.network.get_elements_by_type(Busbar)}
+        for bus_id in all_buses:
+            adjacency[bus_id] = set()
+
+        # Lines
+        for line in self.network.get_elements_by_type(Line):
+            if line.in_service:
+                adjacency.setdefault(line.bus_from, set()).add(line.bus_to)
+                adjacency.setdefault(line.bus_to, set()).add(line.bus_from)
+
+        # 2W Transformers
+        for tr in self.network.get_elements_by_type(Transformer2W):
+            if tr.in_service and not self._is_psu_transformer(tr.id):
+                adjacency.setdefault(tr.bus_hv, set()).add(tr.bus_lv)
+                adjacency.setdefault(tr.bus_lv, set()).add(tr.bus_hv)
+
+        # 3W Transformers
+        for tr in self.network.get_elements_by_type(Transformer3W):
+            if tr.in_service and not self._is_psu_transformer(tr.id):
+                for b1, b2 in [(tr.bus_hv, tr.bus_mv), (tr.bus_hv, tr.bus_lv), (tr.bus_mv, tr.bus_lv)]:
+                    adjacency.setdefault(b1, set()).add(b2)
+                    adjacency.setdefault(b2, set()).add(b1)
+
+        # Autotransformers
+        for at in self.network.get_elements_by_type(Autotransformer):
+            if at.in_service:
+                adjacency.setdefault(at.bus_hv, set()).add(at.bus_lv)
+                adjacency.setdefault(at.bus_lv, set()).add(at.bus_hv)
+
+        # Impedances
+        for imp in self.network.get_elements_by_type(Impedance):
+            if imp.in_service:
+                adjacency.setdefault(imp.bus_from, set()).add(imp.bus_to)
+                adjacency.setdefault(imp.bus_to, set()).add(imp.bus_from)
+
+        # BFS from source buses
+        visited = set()
+        queue = list(source_buses)
+        while queue:
+            bus = queue.pop(0)
+            if bus in visited:
+                continue
+            visited.add(bus)
+            for neighbor in adjacency.get(bus, set()):
+                if neighbor not in visited:
+                    queue.append(neighbor)
+
+        return visited
 
     def _get_psu_generator_buses(self) -> set:
         """Get set of bus IDs that are generator-side buses in PSUs."""
@@ -167,15 +253,27 @@ class YBusBuilder:
         # Invert to get Z-bus
         Z1_bus = self._safe_invert(Y1, "Z1")
         Z2_bus = self._safe_invert(Y2, "Z2")
-        Z0_bus = self._safe_invert(Y0, "Z0")
+        # Z0 needs special handling - some buses may lack zero-sequence path
+        Z0_bus, no_z0_buses = self._safe_invert_z0(Y0)
 
         # Extract Thévenin impedances (diagonal elements) in actual Ohms
         result = {}
-        # Only iterate over busbars that are in the Y-bus matrix
-        # (excludes PSU generator-side buses and internal star-point buses)
+
+        # Get PSU generator buses to identify them separately
+        psu_gen_buses = self._get_psu_generator_buses()
+
         for bus_id in self.network.busbars:
+            if bus_id in psu_gen_buses:
+                # PSU generator buses are handled internally - skip
+                continue
+
             if bus_id not in self._bus_index:
-                continue  # Skip buses not in Y-bus (e.g., PSU generator buses)
+                # Isolated bus - assign infinite impedance (Ik = 0)
+                Z_inf = ComplexImpedance(1e12, 1e12)
+                result[bus_id] = (Z_inf, Z_inf, Z_inf)
+                logger.debug(f"  Y-bus: Bus {bus_id} is isolated - Ik = 0")
+                continue
+
             i = self._bus_index[bus_id]
             zbase = self._bus_zbase[bus_id]
 
@@ -227,6 +325,57 @@ class YBusBuilder:
         except np.linalg.LinAlgError:
             logger.warning(f"Y-bus singular for {label} — cannot compute Thévenin impedances")
             return None
+
+    def _safe_invert_z0(self, Y0: np.ndarray) -> Tuple[Optional[np.ndarray], Set[int]]:
+        """Invert Y0 matrix, handling buses without zero-sequence path.
+
+        Zero-sequence networks can have isolated buses (no path to grounded neutral).
+        These buses have Y0[i,i] ≈ 0 and would cause matrix singularity.
+
+        Returns:
+            Tuple of (Z0_bus matrix or None, set of bus indices with no Z0 path)
+        """
+        n = Y0.shape[0]
+        no_z0_buses: Set[int] = set()
+
+        # Identify buses with no zero-sequence path (very small diagonal)
+        for i in range(n):
+            if abs(Y0[i, i]) < 1e-12:
+                no_z0_buses.add(i)
+
+        if not no_z0_buses:
+            # All buses have Z0 path - standard inversion
+            return self._safe_invert(Y0, "Z0"), no_z0_buses
+
+        # Build reduced matrix excluding buses without Z0 path
+        valid_indices = [i for i in range(n) if i not in no_z0_buses]
+        if not valid_indices:
+            # No valid buses - return None
+            logger.warning("Y0 matrix: no buses with zero-sequence path")
+            return None, no_z0_buses
+
+        # Create reduced matrix
+        n_valid = len(valid_indices)
+        Y0_reduced = np.zeros((n_valid, n_valid), dtype=complex)
+        for new_i, old_i in enumerate(valid_indices):
+            for new_j, old_j in enumerate(valid_indices):
+                Y0_reduced[new_i, new_j] = Y0[old_i, old_j]
+
+        # Invert reduced matrix
+        Z0_reduced = self._safe_invert(Y0_reduced, "Z0_reduced")
+        if Z0_reduced is None:
+            return None, no_z0_buses
+
+        # Map back to full matrix (invalid buses will use fallback value)
+        Z0_full = np.full((n, n), complex(1e12, 1e12), dtype=complex)
+        for new_i, old_i in enumerate(valid_indices):
+            for new_j, old_j in enumerate(valid_indices):
+                Z0_full[old_i, old_j] = Z0_reduced[new_i, new_j]
+
+        bus_names = [self._bus_ids[i] for i in no_z0_buses]
+        logger.info(f"Y0 matrix: {len(no_z0_buses)} buses without zero-sequence path: {bus_names}")
+
+        return Z0_full, no_z0_buses
 
     def _to_pu(self, Z: ComplexImpedance, bus_id: str) -> complex:
         """Convert impedance from actual Ohms to per-unit at bus voltage."""
@@ -535,11 +684,6 @@ class YBusBuilder:
             if Z0.magnitude < 1e10:
                 z0_pu = self._to_pu(Z0, network_bus)
                 self._add_shunt(Y0, i, z0_pu)
-
-            logger.debug(
-                f"  Y-bus: PSU {psu.id} at {network_bus}: "
-                f"z1_pu={z1_pu.real:.6f}+j{z1_pu.imag:.6f}"
-            )
 
     def _add_motors(self, Y1, Y2, Y0) -> None:
         """Add asynchronous motors as shunts (max calculation only)."""
