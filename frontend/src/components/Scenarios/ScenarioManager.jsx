@@ -102,7 +102,8 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     } finally {
       setSaving(false);
     }
-  };
+    return null;
+  }, []);
 
   const handleRunCalculation = async () => {
     if (!selectedScenario) return;
@@ -117,7 +118,10 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
 
       if (result.status === 'completed') {
         const fullResult = await calculationsApi.get(result.run_id);
-        onCalculationComplete?.(fullResult);
+        onCalculationComplete?.({
+          ...fullResult,
+          onCaptureSchema: handleCaptureSchema,
+        });
         setShowRunModal(false);
       } else {
         alert('Výpočet zlyhal: ' + result.message);
