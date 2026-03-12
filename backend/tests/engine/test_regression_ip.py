@@ -22,6 +22,8 @@ from app.engine import (
     calculate_short_circuit,
 )
 from app.engine.elements import ComplexImpedance
+from app.api.calculations import _build_network_from_elements as build_calc_network
+from app.api.scenarios import _build_network_from_elements as build_scenario_network
 
 
 class TestTransformerImpedanceWithPkr:
@@ -318,6 +320,139 @@ class TestPSUCorrectionFactor:
         )
         assert has_k_factor, \
             f"Should have KS/KSO factor, got: {result.correction_factors.keys()}"
+
+
+class TestElementMappingAliases:
+    """Regression tests for alternate field names used by imported datasets."""
+
+    @staticmethod
+    def _run_ik3(elements: dict, builder) -> float:
+        network = builder(elements)
+        run = calculate_short_circuit(
+            network=network,
+            fault_types=["Ik3"],
+            fault_buses=["bus_6"],
+            mode="max",
+        )
+        assert run.is_success, run.errors
+        return run.results[0].Ik
+
+    @staticmethod
+    def _base_elements() -> dict:
+        return {
+            "busbars": [
+                {"id": "bus_22", "Un": 22.0},
+                {"id": "bus_6", "Un": 6.3},
+            ],
+            "external_grids": [
+                {
+                    "id": "grid",
+                    "bus_id": "bus_22",
+                    "Sk_max": 450.0,
+                    "Sk_min": 400.0,
+                    "rx_ratio": 0.1,
+                    "c_max": 1.1,
+                }
+            ],
+            "transformers_2w": [
+                {
+                    "id": "T1",
+                    "bus_hv": "bus_22",
+                    "bus_lv": "bus_6",
+                    "Sn": 10.0,
+                    "Un_hv": 22.0,
+                    "Un_lv": 6.3,
+                    "uk_percent": 7.08,
+                    "Pkr": 60.915,
+                    "vector_group": "Dyn11",
+                    "in_service": True,
+                }
+            ],
+            "lines": [],
+            "transformers_3w": [],
+            "autotransformers": [],
+            "generators": [],
+            "motors": [],
+            "impedances": [],
+            "grounding_impedances": [],
+            "psus": [],
+        }
+
+    @pytest.mark.parametrize("builder", [build_calc_network, build_scenario_network])
+    def test_external_grid_and_transformer_aliases_preserve_result(self, builder):
+        """Alias fields (s_sc_max_mva/rx_max/vk_percent/vkr_percent) must map to same Ik3."""
+        canonical = self._base_elements()
+
+        alias = self._base_elements()
+        alias["external_grids"][0] = {
+            "id": "grid",
+            "bus_id": "bus_22",
+            "s_sc_max_mva": 450.0,
+            "s_sc_min_mva": 400.0,
+            "rx_max": 0.1,
+            "c_max": 1.1,
+        }
+        alias["transformers_2w"][0] = {
+            "id": "T1",
+            "bus_hv": "bus_22",
+            "bus_lv": "bus_6",
+            "Sn": 10.0,
+            "Un_hv": 22.0,
+            "Un_lv": 6.3,
+            "vk_percent": 7.08,
+            "vkr_percent": 0.60915,
+            "vector_group": "Dyn11",
+            "in_service": True,
+        }
+
+        ik_canonical = self._run_ik3(canonical, builder)
+        ik_alias = self._run_ik3(alias, builder)
+
+        assert ik_alias == pytest.approx(ik_canonical, rel=1e-6)
+
+    @pytest.mark.parametrize("builder", [build_calc_network, build_scenario_network])
+    def test_parallel_cables_alias_changes_ik3(self, builder):
+        """parallel_cables alias must be honored by runtime mapping."""
+        elements_single = self._base_elements()
+        elements_single["lines"] = [{
+            "id": "L1",
+            "bus_from": "bus_6",
+            "bus_to": "bus_6_remote",
+            "length": 1.0,
+            "r1_per_km": 0.2,
+            "x1_per_km": 0.1,
+            "r0_per_km": 0.6,
+            "x0_per_km": 0.3,
+            "parallel_lines": 1,
+            "in_service": True,
+        }]
+        elements_single["busbars"].append({"id": "bus_6_remote", "Un": 6.3})
+
+        elements_parallel = self._base_elements()
+        elements_parallel["lines"] = [{
+            "id": "L1",
+            "bus_from": "bus_6",
+            "bus_to": "bus_6_remote",
+            "length": 1.0,
+            "r1_per_km": 0.2,
+            "x1_per_km": 0.1,
+            "r0_per_km": 0.6,
+            "x0_per_km": 0.3,
+            "parallel_cables": 2,
+            "in_service": True,
+        }]
+        elements_parallel["busbars"].append({"id": "bus_6_remote", "Un": 6.3})
+
+        # Fault at remote end where line impedance matters
+        network_single = builder(elements_single)
+        run_single = calculate_short_circuit(network_single, ["Ik3"], ["bus_6_remote"], "max")
+        assert run_single.is_success, run_single.errors
+
+        network_parallel = builder(elements_parallel)
+        run_parallel = calculate_short_circuit(network_parallel, ["Ik3"], ["bus_6_remote"], "max")
+        assert run_parallel.is_success, run_parallel.errors
+
+        assert run_parallel.results[0].Ik > run_single.results[0].Ik
 
     def test_psu_impedance_is_modified(self):
         """Test that PSU correction factor modifies combined impedance."""
@@ -776,3 +911,111 @@ class TestImportNormalization:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestGeneratorContributionToShortCircuit:
+    """Verify synchronous generator contribution is included in short-circuit results."""
+
+    def _build_network(self, generator_in_service: bool):
+        net = Network(name="Generator Contribution Toggle")
+
+        net.add_element(Busbar(id="bus_110", Un=110.0))
+        net.add_element(Busbar(id="bus_22", Un=22.0))
+        net.add_element(Busbar(id="bus_gen", Un=10.5))
+
+        net.add_element(ExternalGrid(
+            id="grid",
+            bus_id="bus_110",
+            Sk_max=2000.0,
+            Sk_min=1500.0,
+            rx_ratio=0.1,
+        ))
+
+        net.add_element(Transformer2W(
+            id="tr_main",
+            bus_hv="bus_110",
+            bus_lv="bus_22",
+            Sn=40.0,
+            Un_hv=110.0,
+            Un_lv=22.0,
+            uk_percent=10.0,
+            Pkr=150.0,
+            vector_group="YNyn0",
+            neutral_grounding_hv=NeutralGrounding.GROUNDED,
+            neutral_grounding_lv=NeutralGrounding.GROUNDED,
+        ))
+
+        net.add_element(Transformer2W(
+            id="tr_block",
+            bus_hv="bus_22",
+            bus_lv="bus_gen",
+            Sn=20.0,
+            Un_hv=22.0,
+            Un_lv=10.5,
+            uk_percent=12.0,
+            Pkr=100.0,
+            vector_group="YNd11",
+            neutral_grounding_hv=NeutralGrounding.GROUNDED,
+            neutral_grounding_lv=NeutralGrounding.ISOLATED,
+        ))
+
+        net.add_element(SynchronousGenerator(
+            id="g1",
+            bus_id="bus_gen",
+            Sn=20.0,
+            Un=10.5,
+            Xd_pp=15.0,
+            Ra=0.2,
+            cos_phi=0.85,
+            in_service=generator_in_service,
+        ))
+
+        return net
+
+    def test_generator_in_service_increases_ik3_and_ip(self):
+        net_off = self._build_network(generator_in_service=False)
+        net_on = self._build_network(generator_in_service=True)
+
+        run_off = calculate_short_circuit(
+            network=net_off,
+            fault_types=["Ik3"],
+            fault_buses=["bus_22"],
+            mode="max",
+        )
+        run_on = calculate_short_circuit(
+            network=net_on,
+            fault_types=["Ik3"],
+            fault_buses=["bus_22"],
+            mode="max",
+        )
+
+        assert run_off.is_success and run_on.is_success
+
+        res_off = run_off.results[0]
+        res_on = run_on.results[0]
+
+        assert res_on.Ik > res_off.Ik, "Generator in service should increase Ik3"
+        assert res_on.ip > res_off.ip, "Generator in service should increase ip"
+
+        # Equivalent positive-sequence impedance should decrease with added source
+        assert res_on.Z1.magnitude < res_off.Z1.magnitude
+
+    def test_generator_parameter_mapping_used_by_impedance_model(self):
+        gen = SynchronousGenerator(
+            id="g_map",
+            bus_id="bus_g",
+            Sn=20.0,
+            Un=10.5,
+            Xd_pp=15.0,
+            Ra=0.2,
+            cos_phi=0.85,
+        )
+
+        Z1, _, _ = gen.get_impedance(ref_voltage=10.5)
+
+        zbase = (gen.Un ** 2) / gen.Sn
+        expected_x = 0.15 * zbase
+        expected_r = 0.002 * zbase
+
+        assert abs(Z1.x - expected_x) < 1e-9, "Xd_pp [%] must map to X1 via percent-to-pu conversion"
+        assert abs(Z1.r - expected_r) < 1e-9, "Ra [%] must map to R1 via percent-to-pu conversion"
