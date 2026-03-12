@@ -323,6 +323,12 @@ def _build_network_from_elements(elements: dict) -> Network:
     """
     network = Network(name="scenario_network")
 
+    def _first(data: dict, keys: list[str], default=None):
+        for key in keys:
+            if key in data and data[key] is not None:
+                return data[key]
+        return default
+
     # Add busbars first
     for bus_data in elements.get("busbars", []):
         bus = Busbar(
@@ -335,14 +341,19 @@ def _build_network_from_elements(elements: dict) -> Network:
 
     # Add external grids
     for grid_data in elements.get("external_grids", []):
+        sk_max = _first(grid_data, ["Sk_max", "s_sc_max_mva", "sk_max_mva", "sk3max_mva"])
+        if sk_max is None:
+            raise ValueError(f"External grid {grid_data.get('id', '')} is missing Sk_max/s_sc_max_mva")
+        sk_min = _first(grid_data, ["Sk_min", "s_sc_min_mva", "sk_min_mva", "sk3min_mva"], sk_max)
+
         grid = ExternalGrid(
             id=grid_data["id"],
             name=grid_data.get("name"),
             bus_id=grid_data["bus_id"],
-            Sk_max=grid_data["Sk_max"],
-            Sk_min=grid_data.get("Sk_min", grid_data["Sk_max"]),
-            rx_ratio=grid_data.get("rx_ratio", 0.1),
-            c_max=grid_data.get("c_max", 1.1),
+            Sk_max=sk_max,
+            Sk_min=sk_min,
+            rx_ratio=_first(grid_data, ["rx_ratio", "rx_max", "rx"], 0.1),
+            c_max=_first(grid_data, ["c_max", "c"], 1.1),
             c_min=grid_data.get("c_min", 1.0),
             Z0_Z1_ratio=grid_data.get("Z0_Z1_ratio", 1.0),
             X0_X1_ratio=grid_data.get("X0_X1_ratio", 1.0),
@@ -352,6 +363,7 @@ def _build_network_from_elements(elements: dict) -> Network:
 
     # Add lines
     for line_data in elements.get("lines", []):
+        parallel_lines = int(_first(line_data, ["parallel_lines", "parallel_cables", "parallel", "n_parallel"], 1))
         line = Line(
             id=line_data["id"],
             name=line_data.get("name"),
@@ -362,7 +374,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             x1_per_km=line_data["x1_per_km"],
             r0_per_km=line_data.get("r0_per_km", line_data["r1_per_km"] * 3),
             x0_per_km=line_data.get("x0_per_km", line_data["x1_per_km"] * 3),
-            parallel_lines=line_data.get("parallel_lines", 1),
+            parallel_lines=max(parallel_lines, 1),
             is_cable=line_data.get("type") == "cable",
             in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
@@ -370,6 +382,14 @@ def _build_network_from_elements(elements: dict) -> Network:
 
     # Add 2W transformers
     for tr_data in elements.get("transformers_2w", []):
+        uk_percent = _first(tr_data, ["uk_percent", "vk_percent", "uk"])
+        if uk_percent is None:
+            raise ValueError(f"Transformer {tr_data.get('id', '')} is missing uk_percent/vk_percent")
+
+        pkr = tr_data.get("Pkr")
+        if pkr is None and tr_data.get("vkr_percent") is not None:
+            pkr = (tr_data["vkr_percent"] / 100.0) * tr_data["Sn"] * 1000.0
+
         tr = Transformer2W(
             id=tr_data["id"],
             name=tr_data.get("name"),
@@ -378,8 +398,8 @@ def _build_network_from_elements(elements: dict) -> Network:
             Sn=tr_data["Sn"],
             Un_hv=tr_data["Un_hv"],
             Un_lv=tr_data["Un_lv"],
-            uk_percent=tr_data["uk_percent"],
-            Pkr=tr_data.get("Pkr", 0),
+            uk_percent=uk_percent,
+            Pkr=pkr if pkr is not None else 0,
             vector_group=tr_data.get("vector_group", "Dyn11"),
             tap_position=tr_data.get("tap_position", 0),
             neutral_grounding_hv=tr_data.get("neutral_grounding_hv", "isolated"),
