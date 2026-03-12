@@ -64,6 +64,7 @@ def generate_calculation_report(
     project: Project,
     version: NetworkVersion,
     scenario: Scenario = None,
+    schema_image: bytes = None,
 ) -> BytesIO:
     """Generate professional PDF report for calculation results."""
 
@@ -290,26 +291,36 @@ def generate_calculation_report(
     # ========== PAGE 4: NETWORK SCHEMA ==========
     story.append(Paragraph("2. Jednopólová schéma", heading1_style))
 
-    # Generate schema
+    # Use provided schema image from frontend, or generate fallback
     try:
-        results_for_schema = []
-        for r in run.results:
-            results_for_schema.append({
-                'bus_id': r.bus_id,
-                'fault_type': r.fault_type.value,
-                'Ik': r.Ik,
-                'ip': r.ip,
-            })
+        if schema_image:
+            # Use frontend-captured React Flow schema
+            schema_img = Image(BytesIO(schema_image), width=160*mm, height=112*mm)
+        else:
+            # Fallback: generate schema using matplotlib
+            results_for_schema = []
+            for r in run.results:
+                results_for_schema.append({
+                    'bus_id': r.bus_id,
+                    'fault_type': r.fault_type.value,
+                    'Ik': r.Ik,
+                    'ip': r.ip,
+                })
 
-        schema_bytes = generate_network_schema(
-            elements_data,
-            results=results_for_schema,
-            width=10,
-            height=7,
-            format='png'
-        )
+            # Pass element active checker from scenario to show disabled elements as grayed out
+            is_active_fn = scenario.is_element_active if scenario else None
 
-        schema_img = Image(BytesIO(schema_bytes), width=160*mm, height=112*mm)
+            schema_bytes = generate_network_schema(
+                elements_data,
+                results=results_for_schema,
+                width=10,
+                height=7,
+                format='png',
+                is_element_active_fn=is_active_fn
+            )
+
+            schema_img = Image(BytesIO(schema_bytes), width=160*mm, height=112*mm)
+
         story.append(schema_img)
     except Exception as e:
         story.append(Paragraph(f"Schéma nebola vygenerovaná: {str(e)}", small_style))

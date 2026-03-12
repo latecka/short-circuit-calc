@@ -1,9 +1,12 @@
 """Export API endpoints."""
 
+import base64
 from io import BytesIO
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse, Response
+from pydantic import BaseModel
 
 from app.api.deps import DBSession, CurrentUser
 from app.models import CalculationRun, Project, NetworkVersion, Scenario, AuditAction
@@ -12,6 +15,10 @@ from app.services.network_schema import generate_network_schema
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/export", tags=["export"])
+
+
+class PdfExportRequest(BaseModel):
+    schema_image: Optional[str] = None  # Base64 encoded PNG data URL
 
 
 def _get_calculation_data(db: DBSession, run_id: str, current_user: CurrentUser):
@@ -38,17 +45,19 @@ def _get_calculation_data(db: DBSession, run_id: str, current_user: CurrentUser)
     return run, project, version, scenario
 
 
-@router.get("/pdf/{run_id}")
-def export_pdf_report(
+def _export_pdf_internal(
     run_id: str,
     db: DBSession,
     current_user: CurrentUser,
+    schema_image_bytes: bytes = None,
 ):
-    """Export calculation results as PDF."""
+    """Internal PDF export logic."""
     run, project, version, scenario = _get_calculation_data(db, run_id, current_user)
 
     # Generate PDF
-    pdf_buffer = export_pdf.generate_calculation_report(run, project, version, scenario)
+    pdf_buffer = export_pdf.generate_calculation_report(
+        run, project, version, scenario, schema_image=schema_image_bytes
+    )
 
     # Log export
     log_action(
@@ -68,8 +77,43 @@ def export_pdf_report(
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
+
+
+@router.get("/pdf/{run_id}")
+def export_pdf_report_get(
+    run_id: str,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Export calculation results as PDF (fallback without schema image)."""
+    return _export_pdf_internal(run_id, db, current_user)
+
+
+@router.post("/pdf/{run_id}")
+def export_pdf_report_post(
+    run_id: str,
+    db: DBSession,
+    current_user: CurrentUser,
+    body: PdfExportRequest,
+):
+    """Export calculation results as PDF with frontend-captured schema image."""
+    schema_image_bytes = None
+
+    if body.schema_image:
+        # Parse base64 data URL: "data:image/png;base64,..."
+        if body.schema_image.startswith('data:'):
+            # Extract base64 part after comma
+            base64_data = body.schema_image.split(',', 1)[1] if ',' in body.schema_image else body.schema_image
+        else:
+            base64_data = body.schema_image
+
+        schema_image_bytes = base64.b64decode(base64_data)
+
+    return _export_pdf_internal(run_id, db, current_user, schema_image_bytes)
 
 
 @router.get("/xlsx/{run_id}")
@@ -102,12 +146,14 @@ def export_xlsx_report(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
 
 @router.get("/schema/{run_id}")
-def export_network_schema(
+def export_network_schema_endpoint(
     run_id: str,
     db: DBSession,
     current_user: CurrentUser,
@@ -120,13 +166,27 @@ def export_network_schema(
     elements = version.elements or {}
 
     # Get results for display on diagram
-    results = run.results if run.results else None
+    results = None
+    if run.results:
+        results = [
+            {
+                'bus_id': r.bus_id,
+                'fault_type': r.fault_type.value,
+                'Ik': r.Ik,
+                'ip': r.ip,
+            }
+            for r in run.results
+        ]
+
+    # Get element active checker from scenario for proper visualization
+    is_active_fn = scenario.is_element_active if scenario else None
 
     # Generate schema
     schema_bytes = generate_network_schema(
         elements=elements,
         results=results,
         format=format,
+        is_element_active_fn=is_active_fn,
     )
 
     # Determine media type
@@ -140,6 +200,8 @@ def export_network_schema(
         media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
