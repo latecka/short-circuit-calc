@@ -60,10 +60,50 @@ class Scenario(Base):
     )
 
     def is_element_active(self, element_type: str, element_id: str) -> bool:
-        """Check if an element is active in this scenario."""
-        type_states = self.element_states.get(element_type, {})
-        # Default to True if not specified
-        return type_states.get(element_id, True)
+        """Check if an element is active in this scenario.
+
+        Supports both legacy shape:
+        {
+            "lines": {"L1": true}
+        }
+
+        and breaker-centric shape:
+        {
+            "breakers": {"L1": true, "T1_HV": true, "T1_LV": false}
+        }
+
+        Compatibility rule:
+        - If a breaker key for the element is explicitly present, breaker state wins.
+        - If breaker key is missing, fallback to legacy per-type element state.
+        """
+
+        def _legacy_state() -> bool:
+            type_states = self.element_states.get(element_type, {})
+            return type_states.get(element_id, True)
+
+        breakers = self.element_states.get("breakers")
+        if isinstance(breakers, dict):
+            if element_type in {"transformers_2w", "autotransformers"}:
+                side_keys = [f"{element_id}_HV", f"{element_id}_LV"]
+                if element_id in breakers:
+                    return breakers[element_id]
+                if any(k in breakers for k in side_keys):
+                    return all(breakers.get(k, True) for k in side_keys)
+                return _legacy_state()
+
+            if element_type == "transformers_3w":
+                side_keys = [f"{element_id}_HV", f"{element_id}_MV", f"{element_id}_LV"]
+                if element_id in breakers:
+                    return breakers[element_id]
+                if any(k in breakers for k in side_keys):
+                    return all(breakers.get(k, True) for k in side_keys)
+                return _legacy_state()
+
+            if element_id in breakers:
+                return breakers[element_id]
+            return _legacy_state()
+
+        return _legacy_state()
 
     def set_element_state(self, element_type: str, element_id: str, active: bool):
         """Set the active state of an element."""

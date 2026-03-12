@@ -776,3 +776,111 @@ class TestImportNormalization:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestGeneratorContributionToShortCircuit:
+    """Verify synchronous generator contribution is included in short-circuit results."""
+
+    def _build_network(self, generator_in_service: bool):
+        net = Network(name="Generator Contribution Toggle")
+
+        net.add_element(Busbar(id="bus_110", Un=110.0))
+        net.add_element(Busbar(id="bus_22", Un=22.0))
+        net.add_element(Busbar(id="bus_gen", Un=10.5))
+
+        net.add_element(ExternalGrid(
+            id="grid",
+            bus_id="bus_110",
+            Sk_max=2000.0,
+            Sk_min=1500.0,
+            rx_ratio=0.1,
+        ))
+
+        net.add_element(Transformer2W(
+            id="tr_main",
+            bus_hv="bus_110",
+            bus_lv="bus_22",
+            Sn=40.0,
+            Un_hv=110.0,
+            Un_lv=22.0,
+            uk_percent=10.0,
+            Pkr=150.0,
+            vector_group="YNyn0",
+            neutral_grounding_hv=NeutralGrounding.GROUNDED,
+            neutral_grounding_lv=NeutralGrounding.GROUNDED,
+        ))
+
+        net.add_element(Transformer2W(
+            id="tr_block",
+            bus_hv="bus_22",
+            bus_lv="bus_gen",
+            Sn=20.0,
+            Un_hv=22.0,
+            Un_lv=10.5,
+            uk_percent=12.0,
+            Pkr=100.0,
+            vector_group="YNd11",
+            neutral_grounding_hv=NeutralGrounding.GROUNDED,
+            neutral_grounding_lv=NeutralGrounding.ISOLATED,
+        ))
+
+        net.add_element(SynchronousGenerator(
+            id="g1",
+            bus_id="bus_gen",
+            Sn=20.0,
+            Un=10.5,
+            Xd_pp=15.0,
+            Ra=0.2,
+            cos_phi=0.85,
+            in_service=generator_in_service,
+        ))
+
+        return net
+
+    def test_generator_in_service_increases_ik3_and_ip(self):
+        net_off = self._build_network(generator_in_service=False)
+        net_on = self._build_network(generator_in_service=True)
+
+        run_off = calculate_short_circuit(
+            network=net_off,
+            fault_types=["Ik3"],
+            fault_buses=["bus_22"],
+            mode="max",
+        )
+        run_on = calculate_short_circuit(
+            network=net_on,
+            fault_types=["Ik3"],
+            fault_buses=["bus_22"],
+            mode="max",
+        )
+
+        assert run_off.is_success and run_on.is_success
+
+        res_off = run_off.results[0]
+        res_on = run_on.results[0]
+
+        assert res_on.Ik > res_off.Ik, "Generator in service should increase Ik3"
+        assert res_on.ip > res_off.ip, "Generator in service should increase ip"
+
+        # Equivalent positive-sequence impedance should decrease with added source
+        assert res_on.Z1.magnitude < res_off.Z1.magnitude
+
+    def test_generator_parameter_mapping_used_by_impedance_model(self):
+        gen = SynchronousGenerator(
+            id="g_map",
+            bus_id="bus_g",
+            Sn=20.0,
+            Un=10.5,
+            Xd_pp=15.0,
+            Ra=0.2,
+            cos_phi=0.85,
+        )
+
+        Z1, _, _ = gen.get_impedance(ref_voltage=10.5)
+
+        zbase = (gen.Un ** 2) / gen.Sn
+        expected_x = 0.15 * zbase
+        expected_r = 0.002 * zbase
+
+        assert abs(Z1.x - expected_x) < 1e-9, "Xd_pp [%] must map to X1 via percent-to-pu conversion"
+        assert abs(Z1.r - expected_r) < 1e-9, "Ra [%] must map to R1 via percent-to-pu conversion"
