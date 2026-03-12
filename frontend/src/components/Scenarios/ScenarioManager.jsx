@@ -38,6 +38,8 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
 
   const normalizedBreakerStates = selectedScenario?.element_states?.breakers ?? {};
 
+  const handleCaptureSchema = async () => null;
+
   const handleCreate = async () => {
     if (!newScenarioName.trim()) return;
     setCreating(true);
@@ -105,6 +107,7 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     if (!selectedScenario) return;
     setRunning(true);
     try {
+      await handleCaptureSchema();
       const result = await scenariosApi.run(
         projectId,
         selectedScenario.id,
