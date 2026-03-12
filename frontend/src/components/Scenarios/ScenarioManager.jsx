@@ -36,10 +36,7 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     }
   };
 
-  const normalizedBreakerStates = useMemo(() => {
-    const current = selectedScenario?.element_states?.breakers || {};
-    return current;
-  }, [selectedScenario]);
+  const normalizedBreakerStates = selectedScenario?.element_states?.breakers ?? {};
 
   const handleCreate = async () => {
     if (!newScenarioName.trim()) return;
@@ -102,8 +99,7 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     } finally {
       setSaving(false);
     }
-    return null;
-  }, []);
+  };
 
   const handleRunCalculation = async () => {
     if (!selectedScenario) return;
