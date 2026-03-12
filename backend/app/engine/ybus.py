@@ -253,7 +253,8 @@ class YBusBuilder:
         # Invert to get Z-bus
         Z1_bus = self._safe_invert(Y1, "Z1")
         Z2_bus = self._safe_invert(Y2, "Z2")
-        Z0_bus = self._safe_invert(Y0, "Z0")
+        # Z0 needs special handling - some buses may lack zero-sequence path
+        Z0_bus, no_z0_buses = self._safe_invert_z0(Y0)
 
         # Extract Thévenin impedances (diagonal elements) in actual Ohms
         result = {}
@@ -324,6 +325,57 @@ class YBusBuilder:
         except np.linalg.LinAlgError:
             logger.warning(f"Y-bus singular for {label} — cannot compute Thévenin impedances")
             return None
+
+    def _safe_invert_z0(self, Y0: np.ndarray) -> Tuple[Optional[np.ndarray], Set[int]]:
+        """Invert Y0 matrix, handling buses without zero-sequence path.
+
+        Zero-sequence networks can have isolated buses (no path to grounded neutral).
+        These buses have Y0[i,i] ≈ 0 and would cause matrix singularity.
+
+        Returns:
+            Tuple of (Z0_bus matrix or None, set of bus indices with no Z0 path)
+        """
+        n = Y0.shape[0]
+        no_z0_buses: Set[int] = set()
+
+        # Identify buses with no zero-sequence path (very small diagonal)
+        for i in range(n):
+            if abs(Y0[i, i]) < 1e-12:
+                no_z0_buses.add(i)
+
+        if not no_z0_buses:
+            # All buses have Z0 path - standard inversion
+            return self._safe_invert(Y0, "Z0"), no_z0_buses
+
+        # Build reduced matrix excluding buses without Z0 path
+        valid_indices = [i for i in range(n) if i not in no_z0_buses]
+        if not valid_indices:
+            # No valid buses - return None
+            logger.warning("Y0 matrix: no buses with zero-sequence path")
+            return None, no_z0_buses
+
+        # Create reduced matrix
+        n_valid = len(valid_indices)
+        Y0_reduced = np.zeros((n_valid, n_valid), dtype=complex)
+        for new_i, old_i in enumerate(valid_indices):
+            for new_j, old_j in enumerate(valid_indices):
+                Y0_reduced[new_i, new_j] = Y0[old_i, old_j]
+
+        # Invert reduced matrix
+        Z0_reduced = self._safe_invert(Y0_reduced, "Z0_reduced")
+        if Z0_reduced is None:
+            return None, no_z0_buses
+
+        # Map back to full matrix (invalid buses will use fallback value)
+        Z0_full = np.full((n, n), complex(1e12, 1e12), dtype=complex)
+        for new_i, old_i in enumerate(valid_indices):
+            for new_j, old_j in enumerate(valid_indices):
+                Z0_full[old_i, old_j] = Z0_reduced[new_i, new_j]
+
+        bus_names = [self._bus_ids[i] for i in no_z0_buses]
+        logger.info(f"Y0 matrix: {len(no_z0_buses)} buses without zero-sequence path: {bus_names}")
+
+        return Z0_full, no_z0_buses
 
     def _to_pu(self, Z: ComplexImpedance, bus_id: str) -> complex:
         """Convert impedance from actual Ohms to per-unit at bus voltage."""
