@@ -315,7 +315,12 @@ def run_scenario(
 
 
 def _build_network_from_elements(elements: dict) -> Network:
-    """Build Network object from elements dictionary."""
+    """Build Network object from elements dictionary.
+
+    Elements that pass scenario filtering are always set to in_service=True,
+    because the scenario filter already determines which elements are active.
+    The JSON in_service flag is ignored - scenario breaker states take precedence.
+    """
     network = Network(name="scenario_network")
 
     # Add busbars first
@@ -359,7 +364,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             x0_per_km=line_data.get("x0_per_km", line_data["x1_per_km"] * 3),
             parallel_lines=line_data.get("parallel_lines", 1),
             is_cable=line_data.get("type") == "cable",
-            in_service=line_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(line)
 
@@ -381,7 +386,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             neutral_grounding_lv=tr_data.get("neutral_grounding_lv", "isolated"),
             grounding_impedance_hv_id=tr_data.get("grounding_impedance_hv_id"),
             grounding_impedance_lv_id=tr_data.get("grounding_impedance_lv_id"),
-            in_service=tr_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(tr)
 
@@ -405,7 +410,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             Pkr_hv_mv=tr_data.get("Pkr_hv_mv", 0),
             Pkr_hv_lv=tr_data.get("Pkr_hv_lv", 0),
             Pkr_mv_lv=tr_data.get("Pkr_mv_lv", 0),
-            in_service=tr_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(tr)
 
@@ -424,7 +429,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             neutral_grounding=at_data.get("neutral_grounding", "grounded"),
             has_tertiary_delta=at_data.get("has_tertiary_delta", False),
             tertiary_Sn=at_data.get("tertiary_Sn"),
-            in_service=at_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(at)
 
@@ -440,7 +445,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             Ra=gen_data.get("Ra", 0),
             cos_phi=gen_data.get("cos_phi", 0.85),
             connection=gen_data.get("connection", "direct"),
-            in_service=gen_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(gen)
 
@@ -460,7 +465,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             Ia_In=motor_data["Ia_In"],
             pole_pairs=motor_data.get("pole_pairs", 1),
             include_in_sc=motor_data.get("include_in_sc", True),
-            in_service=motor_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(motor)
 
@@ -475,7 +480,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             X=imp_data["X"],
             R0=imp_data.get("R0"),
             X0=imp_data.get("X0"),
-            in_service=imp_data.get("in_service", True),
+            in_service=True,  # Always True - scenario filtering already excludes inactive elements
         )
         network.add_element(imp)
 

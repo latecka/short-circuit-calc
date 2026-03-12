@@ -119,6 +119,7 @@ class YBusBuilder:
             self._bus_un[bus.id] = bus.Un
             self._bus_zbase[bus.id] = (bus.Un ** 2) / S_BASE if bus.Un > 0 else 1.0
 
+
     def _get_reachable_buses(self) -> set:
         """Find all buses reachable from voltage sources via in-service elements.
 
@@ -631,11 +632,6 @@ class YBusBuilder:
             if Z0.magnitude < 1e10:
                 z0_pu = self._to_pu(Z0, network_bus)
                 self._add_shunt(Y0, i, z0_pu)
-
-            logger.debug(
-                f"  Y-bus: PSU {psu.id} at {network_bus}: "
-                f"z1_pu={z1_pu.real:.6f}+j{z1_pu.imag:.6f}"
-            )
 
     def _add_motors(self, Y1, Y2, Y0) -> None:
         """Add asynchronous motors as shunts (max calculation only)."""
