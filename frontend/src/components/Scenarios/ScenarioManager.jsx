@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { scenariosApi, calculationsApi } from '../../api/client';
 import { Button, Modal, Input, Select } from '../ui';
 import NetworkSchema from '../NetworkEditor/NetworkSchema';
 
 export default function ScenarioManager({ projectId, elements, layoutPositions, onCalculationComplete }) {
-  const schemaRef = useRef(null);
   const [scenarios, setScenarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedScenario, setSelectedScenario] = useState(null);
@@ -103,12 +102,6 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCaptureSchema = useCallback(async () => {
-    if (schemaRef.current?.captureAsBase64) {
-      return await schemaRef.current.captureAsBase64();
-    }
     return null;
   }, []);
 
@@ -184,7 +177,6 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
         </div>
 
         <NetworkSchema
-          ref={schemaRef}
           elements={elements}
           mode="scenario"
           breakerStates={normalizedBreakerStates}
