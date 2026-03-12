@@ -301,12 +301,16 @@ def generate_calculation_report(
                 'ip': r.ip,
             })
 
+        # Pass element active checker from scenario to show disabled elements as grayed out
+        is_active_fn = scenario.is_element_active if scenario else None
+
         schema_bytes = generate_network_schema(
             elements_data,
             results=results_for_schema,
             width=10,
             height=7,
-            format='png'
+            format='png',
+            is_element_active_fn=is_active_fn
         )
 
         schema_img = Image(BytesIO(schema_bytes), width=160*mm, height=112*mm)

@@ -68,6 +68,8 @@ def export_pdf_report(
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
@@ -102,12 +104,14 @@ def export_xlsx_report(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
 
 @router.get("/schema/{run_id}")
-def export_network_schema(
+def export_network_schema_endpoint(
     run_id: str,
     db: DBSession,
     current_user: CurrentUser,
@@ -120,13 +124,27 @@ def export_network_schema(
     elements = version.elements or {}
 
     # Get results for display on diagram
-    results = run.results if run.results else None
+    results = None
+    if run.results:
+        results = [
+            {
+                'bus_id': r.bus_id,
+                'fault_type': r.fault_type.value,
+                'Ik': r.Ik,
+                'ip': r.ip,
+            }
+            for r in run.results
+        ]
+
+    # Get element active checker from scenario for proper visualization
+    is_active_fn = scenario.is_element_active if scenario else None
 
     # Generate schema
     schema_bytes = generate_network_schema(
         elements=elements,
         results=results,
         format=format,
+        is_element_active_fn=is_active_fn,
     )
 
     # Determine media type
@@ -140,6 +158,8 @@ def export_network_schema(
         media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 
