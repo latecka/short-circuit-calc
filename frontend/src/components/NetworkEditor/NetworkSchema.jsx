@@ -1,7 +1,8 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import ReactFlow, { Background, Controls, MiniMap, useNodesState, useEdgesState } from 'reactflow';
 import BreakerEdge from './BreakerEdge';
 import { Button } from '../ui';
+import { exportSchemaToBase64 } from '../../utils/schemaExport';
 
 const edgeTypes = { breaker: BreakerEdge };
 const EMPTY_BREAKERS = {};
@@ -41,7 +42,7 @@ function isEquipmentActive(keys, breakerStates) {
   return keys.every((k) => breakerStates[k] !== false);
 }
 
-export default function NetworkSchema({
+const NetworkSchema = forwardRef(function NetworkSchema({
   elements,
   mode = 'edit',
   breakerStates,
@@ -49,9 +50,17 @@ export default function NetworkSchema({
   onSave,
   layoutPositions,
   onLayoutChange,
-}) {
+}, ref) {
   const [selected, setSelected] = useState(null);
   const [layoutSeed, setLayoutSeed] = useState(0);
+  const flowContainerRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    captureAsBase64: async () => {
+      if (!flowContainerRef.current) return null;
+      return await exportSchemaToBase64(flowContainerRef.current);
+    }
+  }), []);
 
   const graph = useMemo(() => {
     const busbars = elements.busbars || [];
@@ -220,7 +229,7 @@ export default function NetworkSchema({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        <div className="lg:col-span-3 h-[560px] border rounded-lg overflow-hidden bg-white">
+        <div ref={flowContainerRef} className="lg:col-span-3 h-[560px] border rounded-lg overflow-hidden bg-white">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -255,4 +264,6 @@ export default function NetworkSchema({
       </div>
     </div>
   );
-}
+});
+
+export default NetworkSchema;

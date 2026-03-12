@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { scenariosApi, calculationsApi } from '../../api/client';
 import { Button, Modal, Input, Select } from '../ui';
 import NetworkSchema from '../NetworkEditor/NetworkSchema';
 
 export default function ScenarioManager({ projectId, elements, layoutPositions, onCalculationComplete }) {
+  const schemaRef = useRef(null);
   const [scenarios, setScenarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedScenario, setSelectedScenario] = useState(null);
@@ -104,6 +105,13 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
     }
   };
 
+  const handleCaptureSchema = useCallback(async () => {
+    if (schemaRef.current?.captureAsBase64) {
+      return await schemaRef.current.captureAsBase64();
+    }
+    return null;
+  }, []);
+
   const handleRunCalculation = async () => {
     if (!selectedScenario) return;
     setRunning(true);
@@ -117,7 +125,10 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
 
       if (result.status === 'completed') {
         const fullResult = await calculationsApi.get(result.run_id);
-        onCalculationComplete?.(fullResult);
+        onCalculationComplete?.({
+          ...fullResult,
+          onCaptureSchema: handleCaptureSchema,
+        });
         setShowRunModal(false);
       } else {
         alert('Výpočet zlyhal: ' + result.message);
@@ -173,6 +184,7 @@ export default function ScenarioManager({ projectId, elements, layoutPositions, 
         </div>
 
         <NetworkSchema
+          ref={schemaRef}
           elements={elements}
           mode="scenario"
           breakerStates={normalizedBreakerStates}
