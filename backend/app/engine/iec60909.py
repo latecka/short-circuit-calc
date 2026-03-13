@@ -304,7 +304,7 @@ class ShortCircuitCalculator:
 
         Builds the network admittance matrix, inverts it to obtain the
         impedance matrix (Z-bus), and reads the diagonal element Z[i,i]
-        which equals the Thévenin impedance seen from bus i.
+        which equals the Thevenin impedance seen from bus i.
 
         This approach correctly handles meshed networks where multiple
         source paths share common segments.
@@ -327,7 +327,7 @@ class ShortCircuitCalculator:
 
         logger.debug(
             f"=== Thevenin at {bus_id}: Z1={Z1.r:.6f}+j{Z1.x:.6f}, "
-            f"Z2={Z2.r:.6f}+j{Z2.x:.6f} Ω ==="
+            f"Z2={Z2.r:.6f}+j{Z2.x:.6f} Ohm ==="
         )
 
         return Z1, Z2, Z0
@@ -514,7 +514,7 @@ class ShortCircuitCalculator:
 
         Ik2'' = c * Un / |Z1 + Z2|
 
-        For most equipment Z2 ≈ Z1, so Ik2 ≈ (sqrt(3)/2) * Ik3
+        For most equipment Z2 ~= Z1, so Ik2 ~= (sqrt(3)/2) * Ik3
 
         Args:
             Un: Nominal voltage [kV]
@@ -619,7 +619,7 @@ class ShortCircuitCalculator:
             if is_meshed:
                 warnings.append(
                     "Meshed network detected: kappa calculated using radial "
-                    "Method A (IEC 60909-0 §4.3.1.1). For higher accuracy, "
+                    "Method A (IEC 60909-0 Section 4.3.1.1). For higher accuracy, "
                     "Method B or C may be required for meshed networks."
                 )
                 self._meshed_warning_shown = True
@@ -708,6 +708,11 @@ class ShortCircuitCalculator:
                 else:
                     KG = gen.get_KG(bus.Un)
                     factors[f"KG_{gen.id}"] = KG
+        if is_max:
+            psu_transformer_ids = {psu.transformer_id for psu in self.network.get_psus()}
+            for tr in self.network.get_elements_by_type(Transformer2W):
+                if tr.in_service and tr.id not in psu_transformer_ids:
+                    factors[f"KT_{tr.id}"] = tr.get_KT()
 
         return factors
 
