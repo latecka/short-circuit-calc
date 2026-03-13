@@ -41,6 +41,17 @@ function isEquipmentActive(keys, breakerStates) {
   return keys.every((k) => breakerStates[k] !== false);
 }
 
+function getEquipmentStyle(active, accent = '#94a3b8', background = '#ffffff') {
+  return {
+    background,
+    border: `1px solid ${accent}`,
+    borderRadius: 8,
+    opacity: active ? 1 : 0.25,
+    filter: active ? 'none' : 'grayscale(1)',
+    fontSize: 12,
+  };
+}
+
 export default function NetworkSchema({
   elements,
   mode = 'edit',
@@ -61,9 +72,9 @@ export default function NetworkSchema({
 
     const busesByVoltage = new Map();
     busbars.forEach((b) => {
-      const k = Number(b.Un || 0);
-      if (!busesByVoltage.has(k)) busesByVoltage.set(k, []);
-      busesByVoltage.get(k).push(b);
+      const level = Number(b.Un || 0);
+      if (!busesByVoltage.has(level)) busesByVoltage.set(level, []);
+      busesByVoltage.get(level).push(b);
     });
 
     const voltageLevels = [...busesByVoltage.keys()].sort((a, b) => b - a);
@@ -75,9 +86,10 @@ export default function NetworkSchema({
       row.forEach((bus, j) => {
         const x = 150 + j * 280 + layoutSeed * 0;
         const y = 80 + idx * 170;
-        busPositions.set(bus.id, { x, y, Un: bus.Un });
         const nodeId = `bus:${bus.id}`;
         const overriddenPos = layoutPositions?.[nodeId];
+
+        busPositions.set(bus.id, { x, y, Un: bus.Un });
         nodes.push({
           id: nodeId,
           type: 'default',
@@ -90,30 +102,38 @@ export default function NetworkSchema({
     });
 
     const edges = [];
-    const makeEquipmentNode = (type, item, busId, index, keys = [item.id]) => {
+
+    const makeEquipmentNode = (
+      nodeId,
+      type,
+      item,
+      busId,
+      index,
+      keys = [item.id],
+      accent = '#94a3b8',
+      background = '#ffffff',
+    ) => {
       const busPos = busPositions.get(busId);
       if (!busPos) return;
-      const id = `eq:${type}:${item.id}`;
+
       const active = isEquipmentActive(keys, mergedBreakers);
-      const defaultPos = { x: busPos.x + 180 + (index % 3) * 45, y: busPos.y - 90 + Math.floor(index / 3) * 55 };
+      const defaultPos = {
+        x: busPos.x + 180 + (index % 3) * 45,
+        y: busPos.y - 90 + Math.floor(index / 3) * 55,
+      };
+
       nodes.push({
-        id,
-        position: layoutPositions?.[id] || defaultPos,
+        id: nodeId,
+        position: layoutPositions?.[nodeId] || defaultPos,
         data: { label: item.name || item.id, raw: item, type },
         draggable: mode === 'edit',
-        style: {
-          background: '#ffffff',
-          border: '1px solid #94a3b8',
-          borderRadius: 8,
-          opacity: active ? 1 : 0.25,
-          filter: active ? 'none' : 'grayscale(1)',
-          fontSize: 12,
-        },
+        style: getEquipmentStyle(active, accent, background),
       });
+
       edges.push({
-        id: `ed:${id}:${busId}`,
+        id: `ed:${nodeId}:${busId}`,
         source: `bus:${busId}`,
-        target: id,
+        target: nodeId,
         type: 'breaker',
         data: {
           breakerKey: keys[0],
@@ -124,54 +144,137 @@ export default function NetworkSchema({
       });
     };
 
-    const singleBusTypes = ['external_grids', 'generators', 'motors', 'psus', 'impedances', 'grounding_impedances'];
+    const makeBranchEquipmentNode = (
+      nodeId,
+      type,
+      item,
+      fromBus,
+      toBus,
+      keys = [item.id],
+      accent = '#94a3b8',
+      background = '#ffffff',
+    ) => {
+      const fromPos = busPositions.get(fromBus);
+      const toPos = busPositions.get(toBus);
+      if (!fromPos || !toPos) return;
+
+      const active = isEquipmentActive(keys, mergedBreakers);
+      const defaultPos = {
+        x: (fromPos.x + toPos.x) / 2,
+        y: (fromPos.y + toPos.y) / 2 - 45,
+      };
+
+      nodes.push({
+        id: nodeId,
+        position: layoutPositions?.[nodeId] || defaultPos,
+        data: { label: item.name || item.id, raw: item, type },
+        draggable: mode === 'edit',
+        style: getEquipmentStyle(active, accent, background),
+      });
+
+      edges.push({
+        id: `ed:${nodeId}:from`,
+        source: `bus:${fromBus}`,
+        target: nodeId,
+        type: 'breaker',
+        data: {
+          breakerKey: keys[0],
+          isClosed: mergedBreakers[keys[0]] !== false,
+          interactive: mode === 'scenario',
+          onToggle: onToggleBreaker,
+        },
+      });
+      edges.push({
+        id: `ed:${nodeId}:to`,
+        source: nodeId,
+        target: `bus:${toBus}`,
+        type: 'breaker',
+        data: {
+          breakerKey: keys[0],
+          isClosed: mergedBreakers[keys[0]] !== false,
+          interactive: mode === 'scenario',
+          onToggle: onToggleBreaker,
+        },
+      });
+    };
+
+    const singleBusTypes = ['external_grids', 'generators', 'motors'];
     singleBusTypes.forEach((type) => {
-      (elements[type] || []).forEach((item, i) => {
+      (elements[type] || []).forEach((item, index) => {
         const busId = item.bus_id || item.bus || item.busbar_id;
-        makeEquipmentNode(type, item, busId, i, [item.id]);
+        makeEquipmentNode(`eq:${type}:${item.id}`, type, item, busId, index);
       });
     });
 
     (elements.lines || []).forEach((line) => {
-      const from = line.bus_from;
-      const to = line.bus_to;
-      const p1 = busPositions.get(from);
-      const p2 = busPositions.get(to);
-      if (!p1 || !p2) return;
-      const nodeId = `eq:line:${line.id}`;
-      const active = mergedBreakers[line.id] !== false;
-      const defaultPos = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 - 45 };
-      nodes.push({
-        id: nodeId,
-        position: layoutPositions?.[nodeId] || defaultPos,
-        data: { label: line.name || line.id, raw: line, type: 'lines' },
-        draggable: mode === 'edit',
-        style: { border: '1px solid #94a3b8', borderRadius: 8, background: '#fff', opacity: active ? 1 : 0.25, filter: active ? 'none' : 'grayscale(1)' },
-      });
-      edges.push({ id: `ed:l1:${line.id}`, source: `bus:${from}`, target: nodeId, type: 'breaker', data: { breakerKey: line.id, isClosed: active, interactive: mode === 'scenario', onToggle: onToggleBreaker } });
-      edges.push({ id: `ed:l2:${line.id}`, source: nodeId, target: `bus:${to}`, type: 'breaker', data: { breakerKey: line.id, isClosed: active, interactive: mode === 'scenario', onToggle: onToggleBreaker } });
+      makeBranchEquipmentNode(
+        `eq:line:${line.id}`,
+        'lines',
+        line,
+        line.bus_from,
+        line.bus_to,
+        [line.id],
+      );
+    });
+
+    (elements.impedances || []).forEach((impedance) => {
+      makeBranchEquipmentNode(
+        `eq:impedance:${impedance.id}`,
+        'impedances',
+        impedance,
+        impedance.bus_from,
+        impedance.bus_to,
+        [impedance.id],
+        '#f59e0b',
+        '#fffbeb',
+      );
     });
 
     const twoW = [...(elements.transformers_2w || []), ...(elements.autotransformers || [])];
     twoW.forEach((tr) => {
       const hv = tr.bus_hv;
       const lv = tr.bus_lv;
-      const p1 = busPositions.get(hv);
-      const p2 = busPositions.get(lv);
-      if (!p1 || !p2) return;
+      const hvPos = busPositions.get(hv);
+      const lvPos = busPositions.get(lv);
+      if (!hvPos || !lvPos) return;
+
       const nodeId = `eq:tr:${tr.id}`;
       const keys = [`${tr.id}_HV`, `${tr.id}_LV`];
       const active = isEquipmentActive(keys, mergedBreakers);
-      const defaultPos = { x: (p1.x + p2.x) / 2 + 30, y: (p1.y + p2.y) / 2 };
+      const defaultPos = { x: (hvPos.x + lvPos.x) / 2 + 30, y: (hvPos.y + lvPos.y) / 2 };
+
       nodes.push({
         id: nodeId,
         position: layoutPositions?.[nodeId] || defaultPos,
         data: { label: tr.name || tr.id, raw: tr, type: 'transformer' },
         draggable: mode === 'edit',
-        style: { border: '1px solid #94a3b8', borderRadius: 8, background: '#fff', opacity: active ? 1 : 0.25, filter: active ? 'none' : 'grayscale(1)' },
+        style: getEquipmentStyle(active),
       });
-      edges.push({ id: `ed:t1:${tr.id}`, source: `bus:${hv}`, target: nodeId, type: 'breaker', data: { breakerKey: keys[0], isClosed: mergedBreakers[keys[0]] !== false, interactive: mode === 'scenario', onToggle: onToggleBreaker } });
-      edges.push({ id: `ed:t2:${tr.id}`, source: nodeId, target: `bus:${lv}`, type: 'breaker', data: { breakerKey: keys[1], isClosed: mergedBreakers[keys[1]] !== false, interactive: mode === 'scenario', onToggle: onToggleBreaker } });
+
+      edges.push({
+        id: `ed:t1:${tr.id}`,
+        source: `bus:${hv}`,
+        target: nodeId,
+        type: 'breaker',
+        data: {
+          breakerKey: keys[0],
+          isClosed: mergedBreakers[keys[0]] !== false,
+          interactive: mode === 'scenario',
+          onToggle: onToggleBreaker,
+        },
+      });
+      edges.push({
+        id: `ed:t2:${tr.id}`,
+        source: nodeId,
+        target: `bus:${lv}`,
+        type: 'breaker',
+        data: {
+          breakerKey: keys[1],
+          isClosed: mergedBreakers[keys[1]] !== false,
+          interactive: mode === 'scenario',
+          onToggle: onToggleBreaker,
+        },
+      });
     });
 
     return { nodes, edges, breakersBase };
@@ -195,24 +298,32 @@ export default function NetworkSchema({
   const persistLayout = useCallback((sourceNodes) => {
     if (!onLayoutChange) return;
     const next = {};
-    (sourceNodes || []).forEach((n) => {
-      next[n.id] = { x: n.position.x, y: n.position.y };
+    (sourceNodes || []).forEach((node) => {
+      next[node.id] = { x: node.position.x, y: node.position.y };
     });
     onLayoutChange(next);
   }, [onLayoutChange]);
-
 
   return (
     <div className="space-y-3">
       <div className={`rounded-lg border px-3 py-2 flex items-center justify-between ${mode === 'scenario' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
         <div className="text-sm font-medium text-gray-700">
           {mode === 'scenario'
-            ? 'Scenario mód — klikni na vypínač pre zapnutie/vypnutie'
-            : 'Edit mód — vypínače sú len indikátor stavu'}
+            ? 'Scenario mód - klikni na vypínač pre zapnutie/vypnutie'
+            : 'Edit mód - vypínače sú len indikátor stavu'}
         </div>
         {mode === 'edit' && (
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => { setLayoutSeed((s) => s + 1); onLayoutChange?.({}); }}>Auto rozloženie</Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setLayoutSeed((seed) => seed + 1);
+                onLayoutChange?.({});
+              }}
+            >
+              Auto rozloženie
+            </Button>
             <Button size="sm" variant="secondary" onClick={onSave}>Uložiť</Button>
             <Button size="sm" variant="secondary" onClick={() => window.print()}>Exportovať PNG</Button>
           </div>
@@ -246,7 +357,11 @@ export default function NetworkSchema({
             <div className="text-xs space-y-1">
               <div><span className="font-semibold">ID:</span> {selected.id}</div>
               <div><span className="font-semibold">Názov:</span> {selected.data?.label}</div>
-              {selected.data?.raw && <pre className="mt-2 p-2 bg-white rounded border overflow-auto max-h-64">{JSON.stringify(selected.data.raw, null, 2)}</pre>}
+              {selected.data?.raw && (
+                <pre className="mt-2 p-2 bg-white rounded border overflow-auto max-h-64">
+                  {JSON.stringify(selected.data.raw, null, 2)}
+                </pre>
+              )}
             </div>
           ) : (
             <div className="text-sm text-gray-500">Kliknite na prvok v schéme.</div>
