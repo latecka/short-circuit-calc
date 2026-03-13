@@ -7,6 +7,7 @@ const ELEMENT_TYPES = [
   { key: 'busbars', label: 'Uzly (Busbars)', icon: 'M4 6h16M4 12h16M4 18h16' },
   { key: 'external_grids', label: 'Externé siete', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   { key: 'lines', label: 'Vedenia / Káble', icon: 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6' },
+  { key: 'impedances', label: 'Impedancie', icon: 'M4 12h5m6 0h5M9 9l3 3-3 3m6-6l-3 3 3 3' },
   { key: 'transformers_2w', label: 'Transformátory 2W', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
   { key: 'transformers_3w', label: 'Transformátory 3W', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
   { key: 'autotransformers', label: 'Autotransformátory', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
@@ -56,7 +57,6 @@ export default function NetworkEditor({ elements, onChange }) {
 
   return (
     <div className="h-[600px] flex flex-col">
-      {/* Tabs */}
       <div className="flex overflow-x-auto border-b bg-gray-50">
         {ELEMENT_TYPES.map((type) => (
           <button
@@ -78,7 +78,6 @@ export default function NetworkEditor({ elements, onChange }) {
         ))}
       </div>
 
-      {/* Toolbar */}
       <div className="flex justify-between items-center px-4 py-3 border-b bg-white">
         <h3 className="font-medium text-gray-900">{currentType?.label}</h3>
         <Button size="sm" onClick={handleAdd}>
@@ -89,7 +88,6 @@ export default function NetworkEditor({ elements, onChange }) {
         </Button>
       </div>
 
-      {/* Table */}
       <div className="flex-1 overflow-auto">
         <ElementTable
           type={activeTab}
@@ -100,7 +98,6 @@ export default function NetworkEditor({ elements, onChange }) {
         />
       </div>
 
-      {/* Form Modal */}
       <Modal
         isOpen={showForm}
         onClose={() => {

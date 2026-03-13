@@ -5,7 +5,7 @@ const COLUMNS = {
     { key: 'id', label: 'ID' },
     { key: 'name', label: 'Názov' },
     { key: 'Un', label: 'Un [kV]' },
-    { key: 'is_reference', label: 'Referenčný', format: (v) => v ? 'Áno' : 'Nie' },
+    { key: 'is_reference', label: 'Referenčný', format: (v) => (v ? 'Áno' : 'Nie') },
   ],
   external_grids: [
     { key: 'id', label: 'ID' },
@@ -74,10 +74,11 @@ const COLUMNS = {
     { key: 'name', label: 'Názov' },
     { key: 'generator_id', label: 'Generátor' },
     { key: 'transformer_id', label: 'Transformátor' },
-    { key: 'has_oltc', label: 'OLTC', format: (v) => v ? 'Áno' : 'Nie' },
+    { key: 'has_oltc', label: 'OLTC', format: (v) => (v ? 'Áno' : 'Nie') },
   ],
   impedances: [
     { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Názov' },
     { key: 'bus_from', label: 'Z uzla' },
     { key: 'bus_to', label: 'Do uzla' },
     { key: 'R', label: 'R [Ω]' },
@@ -103,7 +104,7 @@ export default function ElementTable({ type, elements, allElements, onEdit, onDe
   }
 
   const getBusName = (busId) => {
-    const bus = allElements.busbars?.find(b => b.id === busId);
+    const bus = allElements.busbars?.find((b) => b.id === busId);
     return bus ? (bus.name || busId) : busId;
   };
 
