@@ -91,8 +91,8 @@ def list_scenarios(
     if not scenarios:
         default_scenario = Scenario(
             project_id=project_id,
-            name="ZÃ¡kladnÃ½ scenÃ¡r",
-            description="VÅ¡etky prvky aktÃ­vne",
+            name="Základný scenár",
+            description="Všetky prvky aktívne",
             calculation_mode=CalculationMode.MAX,
             element_states={},
         )
@@ -329,6 +329,29 @@ def _build_network_from_elements(elements: dict) -> Network:
                 return data[key]
         return default
 
+    def _normalize_generator_ra_percent(gen_data: dict) -> float:
+        sn = _first(gen_data, ["Sn", "sn_mva"], 0)
+        un = _first(gen_data, ["Un", "un_kv"], 0)
+        zbase = ((un ** 2) / sn) if sn and un else None
+
+        ra_ohm = _first(gen_data, ["Ra_ohm", "ra_ohm"])
+        if ra_ohm is not None and zbase:
+            return (ra_ohm / zbase) * 100.0
+
+        ra_mohm = _first(gen_data, ["Ra_mohm", "ra_mohm", "ra_milliohm"])
+        if ra_mohm is not None and zbase:
+            return ((ra_mohm / 1000.0) / zbase) * 100.0
+
+        ra_percent = gen_data.get("Ra", 0)
+        if ra_percent is None:
+            return 0.0
+
+        # Imported plant datasets often store stator resistance in mOhm under `Ra`.
+        if ra_percent >= 5 and zbase:
+            return ((ra_percent / 1000.0) / zbase) * 100.0
+
+        return ra_percent
+
     # Add busbars first
     for bus_data in elements.get("busbars", []):
         bus = Busbar(
@@ -352,7 +375,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             bus_id=grid_data["bus_id"],
             Sk_max=sk_max,
             Sk_min=sk_min,
-            rx_ratio=_first(grid_data, ["rx_ratio", "rx_max", "rx"], 0.1),
+            rx_ratio=_first(grid_data, ["rx_ratio", "rx_max", "rx", "R_X"], 0.1),
             c_max=_first(grid_data, ["c_max", "c"], 1.1),
             c_min=grid_data.get("c_min", 1.0),
             Z0_Z1_ratio=grid_data.get("Z0_Z1_ratio", 1.0),
@@ -462,7 +485,7 @@ def _build_network_from_elements(elements: dict) -> Network:
             Sn=gen_data["Sn"],
             Un=gen_data["Un"],
             Xd_pp=gen_data["Xd_pp"],
-            Ra=gen_data.get("Ra", 0),
+            Ra=_normalize_generator_ra_percent(gen_data),
             cos_phi=gen_data.get("cos_phi", 0.85),
             connection=gen_data.get("connection", "direct"),
             in_service=True,  # Always True - scenario filtering already excludes inactive elements

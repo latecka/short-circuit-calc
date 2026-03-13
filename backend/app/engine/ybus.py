@@ -1,10 +1,10 @@
 """IEC 60909-0 Short-Circuit Calculator - Y-Bus Matrix Module.
 
 This module implements the admittance matrix (Y-bus) method for computing
-Thévenin equivalent impedances at all network buses.
+Thevenin equivalent impedances at all network buses.
 
 The Y-bus approach correctly handles meshed networks where multiple source
-paths share common segments — unlike source superposition, which only works
+paths share common segments - unlike source superposition, which only works
 for purely radial topologies.
 
 Algorithm:
@@ -12,8 +12,8 @@ Algorithm:
     2. Build Y-bus matrix in per-unit (Sbase = 100 MVA)
     3. For branch elements: Y[i,j] -= y; Y[i,i] += y; Y[j,j] += y
     4. For shunt elements:  Y[i,i] += y
-    5. Invert Y-bus → Z-bus
-    6. Diagonal Z_bus[i,i] = Thévenin impedance at bus i
+    5. Invert Y-bus -> Z-bus
+    6. Diagonal Z_bus[i,i] = Thevenin impedance at bus i
 """
 
 from __future__ import annotations
@@ -45,19 +45,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Per-unit base power [MVA] — arbitrary, cancels in the result
+# Per-unit base power [MVA] - arbitrary, cancels in the result
 S_BASE = 100.0
 
 
 @dataclass
 class YBusResult:
-    """Result of Y-bus Thévenin impedance computation."""
+    """Result of Y-bus Thevenin impedance computation."""
 
-    # Mapping bus_id → (Z1, Z2, Z0) in actual Ohms
+    # Mapping bus_id -> (Z1, Z2, Z0) in actual Ohms
     impedances: Dict[str, Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]]
 
     def get(self, bus_id: str) -> Tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]:
-        """Get Thévenin impedances for a bus."""
+        """Get Thevenin impedances for a bus."""
         if bus_id in self.impedances:
             return self.impedances[bus_id]
         raise KeyError(f"Bus {bus_id} not found in Y-bus results")
@@ -65,7 +65,7 @@ class YBusResult:
 
 class YBusBuilder:
     """
-    Builds Y-bus admittance matrices and computes Thévenin impedances.
+    Builds Y-bus admittance matrices and computes Thevenin impedances.
 
     Handles three sequence networks (positive, negative, zero) and all
     IEC 60909-0 element types including correction factors KG, KS, KSO.
@@ -225,7 +225,7 @@ class YBusBuilder:
 
     def compute(self) -> YBusResult:
         """
-        Build Y-bus matrices, invert, and return Thévenin impedances.
+        Build Y-bus matrices, invert, and return Thevenin impedances.
 
         Returns:
             YBusResult with impedances for every bus
@@ -256,7 +256,7 @@ class YBusBuilder:
         # Z0 needs special handling - some buses may lack zero-sequence path
         Z0_bus, no_z0_buses = self._safe_invert_z0(Y0)
 
-        # Extract Thévenin impedances (diagonal elements) in actual Ohms
+        # Extract Thevenin impedances (diagonal elements) in actual Ohms
         result = {}
 
         # Get PSU generator buses to identify them separately
@@ -288,10 +288,10 @@ class YBusBuilder:
             result[bus_id] = (Z1, Z2, Z0)
 
             logger.debug(
-                f"  Y-bus Thévenin at {bus_id}: "
+                f"  Y-bus Thevenin at {bus_id}: "
                 f"Z1={Z1.r:.6f}+j{Z1.x:.6f}, "
                 f"Z2={Z2.r:.6f}+j{Z2.x:.6f}, "
-                f"Z0={Z0.r:.6f}+j{Z0.x:.6f} Ω"
+                f"Z0={Z0.r:.6f}+j{Z0.x:.6f} Ohm"
             )
 
         return YBusResult(impedances=result)
@@ -323,14 +323,14 @@ class YBusBuilder:
         try:
             return np.linalg.inv(Y)
         except np.linalg.LinAlgError:
-            logger.warning(f"Y-bus singular for {label} — cannot compute Thévenin impedances")
+            logger.warning(f"Y-bus singular for {label} - cannot compute Thevenin impedances")
             return None
 
     def _safe_invert_z0(self, Y0: np.ndarray) -> Tuple[Optional[np.ndarray], Set[int]]:
         """Invert Y0 matrix, handling buses without zero-sequence path.
 
         Zero-sequence networks can have isolated buses (no path to grounded neutral).
-        These buses have Y0[i,i] ≈ 0 and would cause matrix singularity.
+        These buses have Y0[i,i] ~= 0 and would cause matrix singularity.
 
         Returns:
             Tuple of (Z0_bus matrix or None, set of bus indices with no Z0 path)
@@ -447,7 +447,7 @@ class YBusBuilder:
                 self._add_branch(Y0, i, j, z0_pu)
 
             logger.debug(
-                f"  Y-bus: Line {line.id} ({bus_from}→{bus_to}): "
+                f"  Y-bus: Line {line.id} ({bus_from}->{bus_to}): "
                 f"z1_pu={z1_pu.real:.6f}+j{z1_pu.imag:.6f}"
             )
 
@@ -501,6 +501,11 @@ class YBusBuilder:
             # Get impedance referred to HV side, then convert to per-unit
             Z1, Z2, Z0 = tr.get_impedance(tr.Un_hv)
 
+            KT = tr.get_KT() if self.is_max else 1.0
+            if self.is_max and KT > 0:
+                Z1 = Z1 * KT
+                Z2 = Z2 * KT
+
             z1_pu = self._to_pu(Z1, bus_hv)
             z2_pu = self._to_pu(Z2, bus_hv)
 
@@ -513,13 +518,13 @@ class YBusBuilder:
                 self._add_branch(Y0, i, j, z0_pu)
 
             logger.debug(
-                f"  Y-bus: Transformer {tr.id} ({bus_hv}→{bus_lv}): "
-                f"z1_pu={z1_pu.real:.6f}+j{z1_pu.imag:.6f}"
+                f"  Y-bus: Transformer {tr.id} ({bus_hv}->{bus_lv}): "
+                f"KT={KT:.4f}, z1_pu={z1_pu.real:.6f}+j{z1_pu.imag:.6f}"
             )
 
     def _prepare_3w_transformers(self) -> None:
         """Pre-create internal star-point buses for 3W transformers."""
-        self._3w_star_buses: Dict[str, str] = {}  # trafo_id → internal bus_id
+        self._3w_star_buses: Dict[str, str] = {}  # trafo_id -> internal bus_id
         for tr in self.network.get_elements_by_type(Transformer3W):
             if not tr.in_service:
                 continue
@@ -631,7 +636,7 @@ class YBusBuilder:
             self._add_shunt(Y1, i, z1_pu)
             self._add_shunt(Y2, i, z2_pu)
             # Z0 for generators is typically infinite (not grounded)
-            # → do not add to Y0
+            # -> do not add to Y0
 
             logger.debug(
                 f"  Y-bus: Generator {gen.id} at {bus_id}: "
@@ -708,7 +713,7 @@ class YBusBuilder:
 
             self._add_shunt(Y1, i, z1_pu)
             self._add_shunt(Y2, i, z2_pu)
-            # Z0 is infinite for motors → do not add
+            # Z0 is infinite for motors -> do not add
 
             logger.debug(
                 f"  Y-bus: Motor {motor.id} at {bus_id}: "

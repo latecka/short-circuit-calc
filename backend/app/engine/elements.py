@@ -146,11 +146,11 @@ class ExternalGrid(NetworkElement):
         Sk = self.Sk_max if is_max else self.Sk_min
         c = self.c_max if is_max else self.c_min
 
-        # Z1 calculation: Z = c * Un² / Sk
+        # Z1 calculation: Z = c * Un^2 / Sk
         Z1_mag = c * (Un ** 2) / Sk
 
-        # From R/X ratio: Z = sqrt(R² + X²), R/X = rx_ratio
-        # X = Z / sqrt(1 + rx²), R = X * rx
+        # From R/X ratio: Z = sqrt(R^2 + X^2), R/X = rx_ratio
+        # X = Z / sqrt(1 + rx^2), R = X * rx
         X1 = Z1_mag / math.sqrt(1 + self.rx_ratio ** 2)
         R1 = X1 * self.rx_ratio
 
@@ -233,6 +233,28 @@ class Transformer2W(NetworkElement):
         """Transformation ratio Un_hv / Un_lv."""
         return self.Un_hv / self.Un_lv if self.Un_lv > 0 else 1.0
 
+    def get_x_pu(self) -> float:
+        """Return transformer short-circuit reactance in p.u. on rated base."""
+        if self.Sn <= 0 or self.Un_hv <= 0:
+            return 0.0
+
+        zbase = (self.Un_hv ** 2) / self.Sn
+        zk = (self.uk_percent / 100) * zbase
+        rk = (self.Pkr / 1000) * (self.Un_hv ** 2) / (self.Sn ** 2)
+        xk = math.sqrt(max(zk ** 2 - rk ** 2, 0.0))
+
+        return xk / zbase if zbase > 0 else 0.0
+
+    def get_KT(self) -> float:
+        """
+        Calculate transformer correction factor KT for network transformers.
+
+        IEC 60909-0 Section 3.3.3, equation 12a:
+            KT = 0.95 / (1 + 0.6 * xT)
+        """
+        x_t_pu = self.get_x_pu()
+        return 0.95 / (1 + 0.6 * x_t_pu)
+
     def get_impedance(self, ref_voltage: float) -> tuple[ComplexImpedance, ComplexImpedance, ComplexImpedance]:
         """
         Calculate Z1, Z2, Z0 impedances referred to ref_voltage.
@@ -249,8 +271,8 @@ class Transformer2W(NetworkElement):
         # Short-circuit impedance
         Zk = (self.uk_percent / 100) * Zbase
 
-        # Resistance from losses: Pkr = 3 * I² * R = Sn * (R/Z) * (uk/100)
-        # R = Pkr * Un² / (Sn² * 1000) [kW -> MW conversion]
+        # Resistance from losses: Pkr = 3 * I^2 * R = Sn * (R/Z) * (uk/100)
+        # R = Pkr * Un^2 / (Sn^2 * 1000) [kW -> MW conversion]
         Rk = (self.Pkr / 1000) * (self.Un_hv ** 2) / (self.Sn ** 2)
 
         # Reactance
@@ -300,12 +322,12 @@ class Transformer2W(NetworkElement):
             # Delta on HV blocks Z0 from HV side
             if lv_grounded:
                 # Z0 available on LV side only
-                return Z1 * 1.0  # Simplified: Z0 ≈ Z1 for Dyn
+                return Z1 * 1.0  # Simplified: Z0 ~= Z1 for Dyn
             else:
                 return Z_INFINITE
         elif hv_grounded and lv_grounded:
             # Both sides grounded - Z0 passes through
-            return Z1 * 1.0  # Simplified: Z0 ≈ Z1
+            return Z1 * 1.0  # Simplified: Z0 ~= Z1
         elif hv_grounded or lv_grounded:
             # One side grounded
             return Z1 * 1.0
@@ -468,7 +490,7 @@ class SynchronousGenerator(NetworkElement):
         X1 *= voltage_ratio
 
         Z1 = ComplexImpedance(R1, X1)
-        Z2 = ComplexImpedance(R1, X1)  # Z2 ≈ Z1 for synchronous generators
+        Z2 = ComplexImpedance(R1, X1)  # Z2 ~= Z1 for synchronous generators
         Z0 = Z_INFINITE  # Generator neutral usually not grounded directly
 
         return Z1, Z2, Z0
@@ -477,10 +499,10 @@ class SynchronousGenerator(NetworkElement):
         """
         Calculate correction factor KG for direct connection.
 
-        IEC 60909-0 §3.6.1, equation 18:
+        IEC 60909-0 Section 3.6.1, equation 18:
         KG = c / (1 + xd'' * sin(phi_rG))
 
-        For directly connected generators where Un_network ≈ UrG,
+        For directly connected generators where Un_network ~= UrG,
         the voltage ratio cancels out.
 
         Args:
@@ -532,7 +554,7 @@ class AsynchronousMotor(NetworkElement):
 
     def get_rx_ratio(self) -> float:
         """
-        Get R/X ratio according to IEC 60909-0 §3.8.
+        Get R/X ratio according to IEC 60909-0 Section 3.8.
 
         Returns:
             R/X ratio
@@ -577,7 +599,7 @@ class AsynchronousMotor(NetworkElement):
         X1 *= voltage_ratio
 
         Z1 = ComplexImpedance(R1, X1)
-        Z2 = ComplexImpedance(R1, X1)  # Z2 ≈ Z1 for motors
+        Z2 = ComplexImpedance(R1, X1)  # Z2 ~= Z1 for motors
         Z0 = Z_INFINITE  # Motor does not provide Z0 path
 
         return Z1, Z2, Z0

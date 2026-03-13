@@ -37,6 +37,11 @@ FIELD_ALIASES = {
         'skmax': 'Sk_max',
         'skmin': 'Sk_min',
         'rx_ratio_max': 'rx_ratio',
+        's_sc_max_mva': 'Sk_max',
+        's_sc_min_mva': 'Sk_min',
+        'rx_max': 'rx_ratio',
+        'rx': 'rx_ratio',
+        'R_X': 'rx_ratio',
     },
     'transformers_2w': {
         'hv_bus_id': 'bus_hv',
@@ -53,6 +58,8 @@ FIELD_ALIASES = {
         'pk_kw': 'Pkr',
         'losses_kw': 'Pkr',
         'uk': 'uk_percent',
+        'vk_percent': 'uk_percent',
+        'vkr_percent': 'vkr_percent',
     },
     'generators': {
         'sn_mva': 'Sn',
@@ -64,6 +71,8 @@ FIELD_ALIASES = {
         'xdpp': 'Xd_pp',
         'ra_pu': 'Ra',  # Will be converted from p.u. to %
         'ra_ohm': 'Ra_ohm',  # Needs special conversion
+        'ra_mohm': 'Ra_mohm',
+        'ra_milliohm': 'Ra_mohm',
     },
     'lines': {
         'from_bus': 'bus_from',
@@ -76,6 +85,8 @@ FIELD_ALIASES = {
         'r0_ohm_per_km': 'r0_per_km',
         'x0_ohm_per_km': 'x0_per_km',
         'parallel_cables': 'parallel_lines',
+        'parallel': 'parallel_lines',
+        'n_parallel': 'parallel_lines',
     },
     'motors': {
         'un_kv': 'Un',
@@ -144,23 +155,25 @@ def _normalize_generator(item: dict) -> dict:
         if item['Xd_pp'] < 1.0:
             item['Xd_pp'] = item['Xd_pp'] * 100
 
-    # Convert Ra from ohms to % (special case not handled by validator)
+    # Convert Ra from ohmic units to % (special case not handled by validator)
+    Sn = item.get('Sn', 0)
+    Un = item.get('Un', 0)
+    Zbase = (Un ** 2) / Sn if Sn > 0 and Un > 0 else None
+
     if 'Ra_ohm' in item and item['Ra_ohm'] is not None:
-        # Need Sn and Un to convert
-        Sn = item.get('Sn', 0)
-        Un = item.get('Un', 0)
-        if Sn > 0 and Un > 0:
-            Zbase = (Un ** 2) / Sn
-            Ra_pu = item['Ra_ohm'] / Zbase
-            # Set as p.u. value - the validator will convert to %
-            item['Ra'] = Ra_pu
+        if Zbase:
+            item['Ra'] = item['Ra_ohm'] / Zbase
         del item['Ra_ohm']
+
+    if 'Ra_mohm' in item and item['Ra_mohm'] is not None:
+        if Zbase:
+            item['Ra'] = (item['Ra_mohm'] / 1000.0) / Zbase
+        del item['Ra_mohm']
 
     # Do NOT convert Ra from p.u. to % here - the validator handles that
     # to avoid double conversion
 
     return item
-
 
 def _normalize_motor(item: dict) -> dict:
     """Apply special conversions for motor fields."""
@@ -180,6 +193,12 @@ def _normalize_transformer_2w(item: dict) -> dict:
     if 'uk' in item and 'uk_percent' not in item:
         item['uk_percent'] = item['uk']
         del item['uk']
+
+    if 'vkr_percent' in item and 'Pkr' not in item:
+        Sn = item.get('Sn', 0)
+        if Sn > 0:
+            item['Pkr'] = (item['vkr_percent'] / 100.0) * Sn * 1000.0
+        del item['vkr_percent']
 
     return item
 
@@ -504,9 +523,9 @@ def validate_elements(elements: dict[str, Any]) -> tuple[dict[str, Any], list[di
                     'index': i,
                     'id': line['id'],
                     'error': (
-                        f"Vedenie '{line['id']}' spÃ¡ja uzly s rÃ´znymi napÃ¤Å¥ovÃ½mi hladinami: "
-                        f"{bus_from} ({un_from} kV) â†’ {bus_to} ({un_to} kV). "
-                        f"Vedenia mÃ´Å¾u spÃ¡jaÅ¥ len uzly s rovnakÃ½m Un."
+                        f"Vedenie '{line['id']}' spája uzly s rôznymi napäovými hladinami: "
+                        f"{bus_from} ({un_from} kV) -> {bus_to} ({un_to} kV). "
+                        f"Vedenia môžu spája len uzly s rovnakým Un."
                     ),
                 })
 
@@ -589,22 +608,22 @@ def import_from_xlsx(data: bytes) -> dict[str, Any]:
         'Uzly': 'busbars',
         'Busbars': 'busbars',
         'busbars': 'busbars',
-        'ExternÃ© siete': 'external_grids',
+        'Externé siete': 'external_grids',
         'External Grids': 'external_grids',
         'external_grids': 'external_grids',
         'Vedenia': 'lines',
         'Lines': 'lines',
         'lines': 'lines',
-        'TransformÃ¡tory 2W': 'transformers_2w',
+        'Transformátory 2W': 'transformers_2w',
         'Transformers 2W': 'transformers_2w',
         'transformers_2w': 'transformers_2w',
-        'TransformÃ¡tory 3W': 'transformers_3w',
+        'Transformátory 3W': 'transformers_3w',
         'Transformers 3W': 'transformers_3w',
         'transformers_3w': 'transformers_3w',
-        'AutotransformÃ¡tory': 'autotransformers',
+        'Autotransformátory': 'autotransformers',
         'Autotransformers': 'autotransformers',
         'autotransformers': 'autotransformers',
-        'GenerÃ¡tory': 'generators',
+        'Generátory': 'generators',
         'Generators': 'generators',
         'generators': 'generators',
         'Motory': 'motors',
@@ -652,7 +671,7 @@ def import_from_xlsx(data: bytes) -> dict[str, Any]:
                             item[header] = value
                         elif isinstance(value, str):
                             lower_val = value.lower().strip()
-                            if lower_val in ('true', 'Ã¡no', 'yes', '1'):
+                            if lower_val in ('true', 'áno', 'yes', '1'):
                                 item[header] = True
                             elif lower_val in ('false', 'nie', 'no', '0'):
                                 item[header] = False
