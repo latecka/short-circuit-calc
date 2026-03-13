@@ -91,8 +91,8 @@ def list_scenarios(
     if not scenarios:
         default_scenario = Scenario(
             project_id=project_id,
-            name="Základný scenár",
-            description="Všetky prvky aktívne",
+            name="ZÃ¡kladnÃ½ scenÃ¡r",
+            description="VÅ¡etky prvky aktÃ­vne",
             calculation_mode=CalculationMode.MAX,
             element_states={},
         )

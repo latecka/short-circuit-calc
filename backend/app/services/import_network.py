@@ -523,9 +523,9 @@ def validate_elements(elements: dict[str, Any]) -> tuple[dict[str, Any], list[di
                     'index': i,
                     'id': line['id'],
                     'error': (
-                        f"Vedenie '{line['id']}' spája uzly s rôznymi napäovými hladinami: "
+                        f"Vedenie '{line['id']}' spÃ¡ja uzly s rÃ´znymi napÃ¤Å¥ovÃ½mi hladinami: "
                         f"{bus_from} ({un_from} kV) -> {bus_to} ({un_to} kV). "
-                        f"Vedenia môžu spája len uzly s rovnakým Un."
+                        f"Vedenia mÃ´Å¾u spÃ¡jaÅ¥ len uzly s rovnakÃ½m Un."
                     ),
                 })
 
@@ -608,22 +608,22 @@ def import_from_xlsx(data: bytes) -> dict[str, Any]:
         'Uzly': 'busbars',
         'Busbars': 'busbars',
         'busbars': 'busbars',
-        'Externé siete': 'external_grids',
+        'ExternÃ© siete': 'external_grids',
         'External Grids': 'external_grids',
         'external_grids': 'external_grids',
         'Vedenia': 'lines',
         'Lines': 'lines',
         'lines': 'lines',
-        'Transformátory 2W': 'transformers_2w',
+        'TransformÃ¡tory 2W': 'transformers_2w',
         'Transformers 2W': 'transformers_2w',
         'transformers_2w': 'transformers_2w',
-        'Transformátory 3W': 'transformers_3w',
+        'TransformÃ¡tory 3W': 'transformers_3w',
         'Transformers 3W': 'transformers_3w',
         'transformers_3w': 'transformers_3w',
-        'Autotransformátory': 'autotransformers',
+        'AutotransformÃ¡tory': 'autotransformers',
         'Autotransformers': 'autotransformers',
         'autotransformers': 'autotransformers',
-        'Generátory': 'generators',
+        'GenerÃ¡tory': 'generators',
         'Generators': 'generators',
         'generators': 'generators',
         'Motory': 'motors',
@@ -671,7 +671,7 @@ def import_from_xlsx(data: bytes) -> dict[str, Any]:
                             item[header] = value
                         elif isinstance(value, str):
                             lower_val = value.lower().strip()
-                            if lower_val in ('true', 'áno', 'yes', '1'):
+                            if lower_val in ('true', 'Ã¡no', 'yes', '1'):
                                 item[header] = True
                             elif lower_val in ('false', 'nie', 'no', '0'):
                                 item[header] = False
